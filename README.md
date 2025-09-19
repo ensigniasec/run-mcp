@@ -4,11 +4,12 @@
 [![lint](https://github.com/ensigniasec/run-mcp/actions/workflows/lint.yml/badge.svg?branch=main)](https://github.com/ensigniasec/run-mcp/actions/workflows/lint.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/ensigniasec/run-mcp?cache=v1)](https://goreportcard.com/report/github.com/ensigniasec/run-mcp)
 [![Release](https://img.shields.io/github/release/ensigniasec/run-mcp.svg?color=%23007ec6)](https://github.com/ensigniasec/run-mcp/releases/latest)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/ensigniasec/run-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/ensigniasec/run-mcp)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/ensigniasec/run-mcp/blob/main/LICENSE)
 
-![Run MCP](docs/RUN-MCP.svg)
-
 **A fast, portable, single-binary security scanner for the Model Context Protocol (MCP).**
+
+![Run MCP](docs/RUN-MCP.svg)
 
 This tool scans MCP (modelcontextprotocol.io) configurations for security vulnerabilities, and helps you enforce security policies for your MCP Configurations.
 
@@ -26,10 +27,20 @@ This tool scans MCP (modelcontextprotocol.io) configurations for security vulner
 
 ## Installation
 
-The easiest way to get started is via npm:
+The easiest way to get started is via package managers:
+
+### npm (all platforms):
 
 ```sh
-npm i @ensignia/run-mcp
+npm i -g @ensignia/run-mcp
+run-mcp --version
+```
+
+### Homebrew (macOS)
+
+```sh
+brew tap ensigniasec/run-mcp
+brew install --cask run-mcp
 run-mcp --version
 ```
 
@@ -55,9 +66,30 @@ Requirements: `cosign` and either `wget` or `curl`. On macOS, `shasum` is used; 
 Alternative verification with GitHub CLI:
 
 ```sh
-gh release verify v0.0.3 --repo ensigniasec/run-mcp
+gh release verify v0.1.1 --repo ensigniasec/run-mcp
 gh attestation verify --owner ensigniasec *.tar.gz
 gh attestation verify --owner ensigniasec checksums.txt
+```
+
+### FAQ:
+
+If Gatekeeper blocks the binary ("Apple could not verify"), you have a few options:
+
+- Open via System Settings: System Settings → Privacy & Security → Open Anyway
+- Reinstall without quarantine:
+
+```sh
+brew reinstall --cask run-mcp
+```
+
+- Or remove the quarantine attribute after install:
+
+```sh
+# For cask installs
+sudo xattr -dr com.apple.quarantine "$(brew --prefix)/Caskroom/run-mcp/*/run-mcp"
+
+# If you installed elsewhere, dequarantine the installed path
+sudo xattr -dr com.apple.quarantine "$(command -v run-mcp)"
 ```
 
 ### Build from source (GO 1.25.0)
@@ -171,8 +203,8 @@ run-mcp org clear
 
 - `-v, --verbose`: Enable detailed logging output.
 - `--json`: Output results in JSON format.
-- `--base-url <URL>`: Base URL for the control-plane API (default: `https://mcp.ensignia.com/v1/`).
-- `--offline`: Run locally without contacting the verification server.
+- `--tui` experimentail TUI mode for interactive results.
+- `--offline`: Run locally without contacting the ratings server.
 - `--org-uuid <UUID>`: Optional organization UUID for reporting. Temporarily overrides the value set in `org register`
 - `--anonymous` (alias `--anon`): Do not send any UUIDs or tracking information.
 

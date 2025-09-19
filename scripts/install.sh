@@ -13,14 +13,14 @@ have_cmd() {
 
 usage() {
   cat <<EOF
-Usage: $0 [-v VERSION] [-f] [-V]
+Usage: $0 [--version VERSION] [-v]
 
 Downloads the run-mcp prebuilt binary archive for your OS/architecture,
 verifies its checksum and signature using cosign, extracts the archive,
 and installs the binary to /usr/local/bin.
 
 Options:
-  --version VERSION       Version to install (required, or set VERSION env var).
+  --version VERSION       Version to install (or set VERSION env var).
   -v, --verbose           Enable verbose debug logs (or set VERBOSE=1).
   -h, --help              Show this help.
 
@@ -31,8 +31,8 @@ Requirements:
   - tar (for .tar.gz) or unzip (for .zip)
 
 Example:
-  $0                    # install latest
-  $0 -v 0.0.3           # install specific version
+  $0                               # install latest
+  $0 --version 0.1.1               # install specific version
 EOF
 }
 
@@ -270,4 +270,22 @@ if command -v run-mcp >/dev/null 2>&1; then
   run-mcp --version || true
 else
   log_info "Note: run-mcp not found on PATH. Ensure $DEST_DIR is in your PATH."
+fi
+
+# Optionally remove macOS quarantine attribute to avoid Gatekeeper blocking.
+if [[ "$OS" == "Darwin" ]]; then
+  if have_cmd xattr; then
+    log_info "Removing macOS quarantine attribute from $DEST_BIN ..."
+    if xattr -dr com.apple.quarantine "$DEST_BIN" 2>/dev/null; then
+      log_info "Quarantine attribute removed."
+    elif have_cmd sudo && sudo xattr -dr com.apple.quarantine "$DEST_BIN"; then
+      log_info "Quarantine attribute removed with sudo."
+    else
+      log_info "Warning: failed to remove quarantine attribute. You can run:"
+      log_info "  sudo xattr -dr com.apple.quarantine $DEST_BIN"
+      log_info "  or remove the quarantine attribute manually via System Settings > Privacy & Security > Open Anyway"
+    fi
+  else
+    log_info "xattr not found; cannot remove quarantine automatically."
+  fi
 fi
