@@ -296,7 +296,7 @@ tasks:
   oss:mirror:
     desc: "Manually mirror filtered snapshot to public repo using local Git creds"
     vars:
-      PUBLIC_REPO: '{{.PUBLIC_REPO | default "git@github.com:ensignia/run-mcp.git"}}'
+      PUBLIC_REPO: '{{.PUBLIC_REPO | default "git@github.com:ensigniasec/run-mcp.git"}}'
     cmds:
       - |
         set -euo pipefail
@@ -315,7 +315,7 @@ tasks:
         git fetch origin main || true
         git checkout -B main origin/main || git checkout main
         echo "Syncing snapshot into public working tree ..."
-        rsync -a --delete "$OSS_DIR"/ ./
+        rsync -a --delete --exclude '.git/' "$OSS_DIR"/ ./
         if [ -n "$(git status --porcelain)" ]; then
           msg="Sync from $(basename $(git rev-parse --show-toplevel 2>/dev/null || echo .))@$SRC_SHA"
           git add -A
@@ -330,7 +330,7 @@ tasks:
     desc: "Sync snapshot and create a tag in the public repo (use local creds)"
     vars:
       TAG: ""
-      PUBLIC_REPO: '{{.PUBLIC_REPO | default "git@github.com:ensignia/run-mcp.git"}}'
+      PUBLIC_REPO: '{{.PUBLIC_REPO | default "git@github.com:ensigniasec/run-mcp.git"}}'
     cmds:
       - |
         set -euo pipefail

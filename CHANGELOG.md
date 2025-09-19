@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- No changes yet.
+- No changes yet
+
+## [0.1.1] - Initial public release
+
+- No changes
 
 ## [0.1.0] - 2025-09-18
 
@@ -76,5 +80,6 @@ result, err))` to push per-file updates to the UI.
   - Adopt v2 schema; refine archives and checksums; add SBOMs for archives and
     source; sign checksums with `cosign`.
 
-[Unreleased]: https://github.com/ensigniasec/run-mcp/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/ensigniasec/run-mcp/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/ensigniasec/run-mcp/releases/tag/v0.1.1
 [0.1.0]: https://github.com/ensigniasec/run-mcp/releases/tag/v0.1.0
