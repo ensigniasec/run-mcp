@@ -309,6 +309,7 @@ tasks:
         fi
         SRC_SUBPATH=$(git rev-parse --show-prefix 2>/dev/null || echo .)
         SRC_SUBPATH=${SRC_SUBPATH%/}
+        TS=$(date -u +%Y%m%d%H%M%S)
         OSS_DIR=$(mktemp -d)
         PUBLIC_DIR=$(mktemp -d)
         echo "Building filtered snapshot into $OSS_DIR ..."
@@ -326,10 +327,32 @@ tasks:
         rsync -a --delete --exclude '.git/' "$OSS_DIR"/ ./
         if [ -n "$(git status --porcelain)" ]; then
           msg="chore(mirror): sync ${SRC_SUBPATH:-.} from ${SRC_REPO_NAME:-local}@$SRC_SHA"
+          BRANCH="chore/mirror/${SRC_REPO_NAME:-local}-${SRC_SHA}-$TS"
+          git checkout -b "$BRANCH"
           git add -A
           git commit -m "$msg"
-          git push origin main
-          echo "Pushed updates to public main."
+          git push -u origin "$BRANCH"
+          # Attempt to open a PR using GitHub CLI if available
+          if command -v gh >/dev/null 2>&1; then
+            gh pr create --title "$msg" --body "Automated mirror from ${SRC_REPO_NAME:-local}@$SRC_SHA\n\n- Source repo: ${SRC_REPO_URL:-unknown}\n- Subpath: ${SRC_SUBPATH:-.}\n- Timestamp: $TS" --base main --head "$BRANCH" || true
+          else
+            # Best-effort PR URL for GitHub
+            REPO_URL='{{.PUBLIC_REPO}}'
+            if printf "%s" "$REPO_URL" | grep -q '^git@github.com:'; then
+              REPO_SLUG=${REPO_URL#git@github.com:}
+            elif printf "%s" "$REPO_URL" | grep -q '^https://github.com/'; then
+              REPO_SLUG=${REPO_URL#https://github.com/}
+            else
+              REPO_SLUG=""
+            fi
+            REPO_SLUG=${REPO_SLUG%.git}
+            if [ -n "$REPO_SLUG" ]; then
+              echo "Open PR: https://github.com/$REPO_SLUG/compare/main...$BRANCH?expand=1"
+            else
+              echo "Branch pushed: $BRANCH. Please open a PR against main in the public repo."
+            fi
+          fi
+          echo "Created branch $BRANCH and proposed a PR instead of pushing to main."
         else
           echo "No changes to sync"
         fi
@@ -342,8 +365,13 @@ tasks:
     cmds:
       - |
         set -euo pipefail
-        if [ -z "{{.TAG}}" ]; then
+        TAG_IN="{{.TAG}}"
+        if [ -z "$TAG_IN" ]; then
+          TAG_IN="${TAG:-}"
+        fi
+        if [ -z "$TAG_IN" ]; then
           echo "TAG is required. Usage: task oss:release TAG=vX.Y.Z [PUBLIC_REPO=git@github.com:org/repo.git]" >&2
+          echo "Alternatively: TAG=vX.Y.Z task oss:release [PUBLIC_REPO=git@github.com:org/repo.git]" >&2
           exit 1
         fi
         # First mirror the latest snapshot
@@ -354,10 +382,10 @@ tasks:
         git clone "{{.PUBLIC_REPO}}" "$PUBLIC_DIR"
         cd "$PUBLIC_DIR"
         git fetch origin --tags
-        if git rev-parse "{{.TAG}}" >/dev/null 2>&1; then
-          echo "Tag {{.TAG}} already exists in public mirror"
+        if git rev-parse "$TAG_IN" >/dev/null 2>&1; then
+          echo "Tag $TAG_IN already exists in public mirror"
         else
-          git tag -a "{{.TAG}}" -m "Mirror release {{.TAG}} from private $SRC_SHA"
-          git push origin "{{.TAG}}"
-          echo "Pushed tag {{.TAG}} to public mirror"
+          git tag -a "$TAG_IN" -m "$TAG_IN release"
+          git push origin "$TAG_IN"
+          echo "Pushed tag $TAG_IN to public mirror"
         fi
