@@ -3,7 +3,8 @@
 
 # The lines below are called `modelines`. See `:help modeline`
 # Feel free to remove those if you don't want/need to use them.
-# yaml-language-server: $schema=https://goreleaser.com/static/schema-pro.json
+# yaml-language-server: $schema=
+
 # vim: set ts=2 sw=2 tw=0 fo=cnqoj
 
 version: 2
@@ -29,9 +30,12 @@ builds:
     goarch: [amd64, arm64]
     ldflags:
       - -s -w
-      - -X main.version={{.Version}}
-      - -X main.commit={{.Commit}}
-      - -X main.date={{.Date}}
+      - -X main.Version={{.Version}}
+      - -X main.Commit={{.Commit}}
+      - -X main.Date={{.Date}}
+      - -X github.com/ensigniasec/run-mcp/internal/api.BuildVersion={{.Version}}
+      - -X github.com/ensigniasec/run-mcp/internal/api.BuildCommit={{.Commit}}
+      - -X github.com/ensigniasec/run-mcp/internal/api.BuildDate={{.Date}}
 
 archives:
   - id: archives
@@ -130,9 +134,28 @@ homebrew_casks:
     ids: [archives]
     description: "A fast, portable, single-binary security scanner for the Model Context Protocol (MCP)."
     homepage: "https://github.com/ensigniasec/run-mcp"
+    # Remove macOS quarantine so Gatekeeper doesn't block first run
+    hooks:
+      post:
+        install: |
+          system_command '/usr/bin/xattr', args: ['-dr', 'com.apple.quarantine', "#{staged_path}/run-mcp"], sudo: true
     commit_author:
       name: goreleaserbot
       email: bot@goreleaser.com
+      signing:
+        enabled: true
+        key: "{{ .Env.GPG_SIGNING_KEY }}"
+
+        # The GPG program to use for signing.
+        #
+        # Templates: allowed.
+        program: gpg2
+
+        # The signature format to use.
+        #
+        # Valid options: openpgp, x509, ssh.
+        # Default: openpgp.
+        format: openpgp
     commit_msg_template: "Brew cask update for {{ .ProjectName }} version {{ .Tag }}"
     uninstall:
       delete:
@@ -140,8 +163,6 @@ homebrew_casks:
       - "~/.run-mcp"
       - "~/Library/Application Support/run-mcp"
       - "~/Library/Application Support/run-mcp/results.json"
-      - "/Library/Application Support/run-mcp"
-      - "/Library/Application Support/run-mcp/config.yaml"
     repository:
       owner: ensigniasec
       name: homebrew-run-mcp

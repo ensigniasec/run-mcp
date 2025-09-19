@@ -50,7 +50,7 @@ func (c *secretScanContext) Traverse(data interface{}, dotPath string) interface
 			out[key] = c.Traverse(value, childPath(dotPath, key))
 		}
 		return out
-	case []interface{}: // ususally ARGS values
+	case []interface{}: // usually ARGS values
 		out := make([]interface{}, len(v))
 		for key, value := range v {
 			out[key] = c.Traverse(value, childPath(dotPath, key))

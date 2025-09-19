@@ -7,7 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- No changes yet
+### Added
+
+- Installer: automatically remove macOS quarantine bit after install to avoid
+  Gatekeeper blocks.
+- Homebrew cask: post-install hook to de-quarantine the binary on macOS.
+
+### Changed
+
+- GoReleaser: inject build metadata into `main.Version`, `main.Commit`,
+  `main.Date` and `internal/api` build variables for accurate `--version` info.
+- Documentation: add npm (global) and Homebrew install instructions, a
+  Gatekeeper FAQ for macOS, document `--tui`, and clarify `--offline` wording.
+- CI: bump Anchore Syft action used in release workflow to v0.20.6.
+- Install script: refresh usage/help and examples; support `--version` long
+  flag.
+- Homebrew cask: enable commit signing; refine uninstall paths to user-level
+  directories.
 
 ## [0.1.1] - Initial public release
 
