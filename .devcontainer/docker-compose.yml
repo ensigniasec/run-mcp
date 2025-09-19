@@ -1,0 +1,12 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+      args:
+        VARIANT: 1-bookworm
+    user: vscode
+    working_dir: /workspaces/run-mcp
+    command: sleep infinity
+    volumes:
+      - ..:/workspaces/run-mcp:cached

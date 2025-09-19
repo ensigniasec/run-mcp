@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+COMMIT_MSG_FILE="$1"
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+
+# Enforce Conventional Commits title on first line
+FIRST_LINE=$(printf "%s" "$COMMIT_MSG" | head -n1)
+if ! echo "$FIRST_LINE" | grep -Eq '^(feat|fix|perf|refactor|docs|style|test|build|ci|chore|revert)(\([a-z0-9,+_-]+\))?(!)?: [^[:space:]].*'; then
+  echo "[commit-msg] Error: Commit message must follow Conventional Commits." >&2
+  echo "Example: feat(api): add scanning endpoint" >&2
+  exit 1
+fi
+
+exit 0

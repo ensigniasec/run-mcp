@@ -1,0 +1,15 @@
+mcp_servers:
+  filesystem:
+    command: "npx"
+    args: ["-y", "@modelcontextprotocol/server-filesystem"]
+    type: "stdio"
+  git:
+    command: "npx"
+    args: ["-y", "@modelcontextprotocol/server-git"] 
+    type: "stdio"
+  web-search:
+    command: "python"
+    args: ["-m", "web_search_server"]
+    type: "stdio"
+    env:
+      SEARCH_API_KEY: "secret-key"

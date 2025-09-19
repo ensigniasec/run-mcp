@@ -1,0 +1,45 @@
+# Build artifacts
+build/ensigniasec/run-mcp/
+build/ensigniasec/run-mcp/*
+build/run-mcp*
+dist/
+./ensigniasec/run-mcp/
+./run-mcp
+./ensigniasec/run-mcp/*
+internal/api-gen/client.gen.go
+
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go
+bin/
+vendor/
+coverage.out
+cover.out
+*.coverprofile
+coverage/
+# OS/editor noise
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+.cursor/
+
+# Taskfile/Temp
+.task/
+.task/**
+.cache/
+tmp/
+
+# Env files
+.env    
+.env*
+**/*.env
+**/.env*

@@ -1,0 +1,4 @@
+package: apigen
+output: internal/api-gen/client.gen.go
+generate:
+  - client

@@ -1,0 +1,1666 @@
+openapi: 3.0.3
+info:
+  title: RUN MCP -- Security Scan Control Plane API
+  description: Security scanning and rating API for Model Context Protocol (MCP) servers
+  version: 0.0.9
+  contact:
+    name: Ensignia Security
+    url: https://ensignia.com
+  license:
+    name: Apache-2.0
+    url: https://opensource.org/licenses/Apache-2.0
+servers:
+  - url: https://mcp.ensignia.com/api/v1
+    description: Production server
+  - url: https://mcp.ensignia.dev/api/v1
+    description: Staging server
+tags:
+  - name: Health
+    description: Service health and readiness.
+  - name: Ratings
+    description: Security ratings retrieval endpoints.
+  - name: Scanning
+    description: Scan control and status endpoints.
+security:
+  - PublishableKeyAuth: []
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Returns the health status of the control plane services
+      operationId: getHealth
+      tags:
+        - Health
+      parameters:
+        - $ref: "#/components/parameters/PublishableAuthHeader"
+      responses:
+        "200":
+          description: Service is healthy or degraded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              examples:
+                healthy:
+                  value:
+                    status: healthy
+                    timestamp: 2025-08-18T09:00:00Z
+                    version: 0.0.9
+                    api_spec_version: 0.0.9
+                    server_version: 1.0.0
+                    services:
+                      database: healthy
+                      scanner_queue: healthy
+                    capabilities:
+                      ratings_lookup: true
+                      async_scanning: true
+                      batch_operations: true
+                    warnings: []
+                    errors: []
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "406":
+          $ref: "#/components/responses/NotAcceptable"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              examples:
+                unhealthy:
+                  value:
+                    status: unhealthy
+                    timestamp: 2025-08-18T09:00:00Z
+                    version: 0.0.9
+                    api_spec_version: 0.0.9
+                    server_version: 1.0.0
+                    services:
+                      database: degraded
+                      scanner_queue: unhealthy
+                    capabilities:
+                      ratings_lookup: true
+                      async_scanning: false
+                      batch_operations: true
+                    warnings:
+                      - queue delays detected
+                    errors:
+                      - scanner worker pool unavailable
+        default:
+          $ref: "#/components/responses/DefaultError"
+  /ratings/purl/{purl}:
+    get:
+      summary: Rating by PURL
+      description: Retrieve SecurityRating using Package URL (PURL) identifier
+      operationId: getRatingByPurl
+      tags:
+        - Ratings
+      parameters:
+        - name: purl
+          in: path
+          required: true
+          description: Package URL (PURL) - URL encoded
+          schema:
+            type: string
+            pattern: ^pkg:.*$
+            maxLength: 512
+          examples:
+            npm_package:
+              value: pkg:npm/@modelcontextprotocol/server-filesystem@1.2.3
+              description: NPM package PURL
+            python_package:
+              value: pkg:pypi/mcp-server@1.0.0
+              description: Python package PURL
+        - $ref: "#/components/parameters/TimeoutQuery"
+        - $ref: "#/components/parameters/OrgUuidHeader"
+        - $ref: "#/components/parameters/HostUuidHeader"
+        - $ref: "#/components/parameters/PublishableAuthHeader"
+      responses:
+        "200":
+          description: Rating found
+          headers:
+            Last-Modified:
+              $ref: "#/components/headers/Last-Modified"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RatingResponse"
+              examples:
+                default:
+                  value:
+                    ratings:
+                      - name: pkg:npm/@modelcontextprotocol/server-filesystem@1.2.3
+                        description: The official Filesystem MCP Server package.
+                        labels:
+                          - Development
+                          - Filesystem
+                          - FilesystemRead
+                          - FilesystemWrite
+                        classification: Allowed
+                        scores:
+                          overall_grade: A
+                          overall_percent: 95
+                          components:
+                            supply_chain: 95
+                            code_quality: 98
+                            maintenance: 100
+                            vulnerabilities: 90
+                          confidence: high
+                        identifiers:
+                          purl: pkg:npm/@modelcontextprotocol/server-filesystem@1.2.3
+                        license: MIT
+                        vulnerabilities: []
+                        tool_calls_count: 3
+                        tool_calls:
+                          - name: list_repos
+                            description: Lists repositories for an organization.
+                            category: Read
+                            sensitive: false
+                          - name: fetch_package_metadata
+                            description: Retrieves package metadata from registry.
+                            category: Read
+                            sensitive: false
+                          - name: run_static_analysis
+                            description: Runs lightweight static checks.
+                            category: Read
+                            sensitive: false
+                        last_updated: 2025-08-18T08:49:30.941Z
+                        source: automated_scan
+        "202":
+          description: Scan in progress, check back soon
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanInProgress"
+              example:
+                scan_id: 123e4567-e89b-12d3-a456-426614174000
+                status: queued
+                estimated_completion: 2025-08-18T09:10:00Z
+                poll_url: /scan-status/123e4567-e89b-12d3-a456-426614174000
+          headers:
+            Location:
+              $ref: "#/components/headers/Location"
+            Retry-After:
+              $ref: "#/components/headers/Retry-After"
+            Cache-Control:
+              description: Caching policy for async receipt responses.
+              schema:
+                type: string
+              example: no-store
+        "400":
+          description: Invalid PURL format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                default:
+                  value:
+                    error: INVALID_PURL
+                    message: Invalid PURL format.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/RatingNotAvailableOrNotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "406":
+          $ref: "#/components/responses/NotAcceptable"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        default:
+          $ref: "#/components/responses/DefaultError"
+  /ratings/repo/{org}/{repo}:
+    get:
+      summary: Rating by Git repository
+      description: Retrieve SecurityRating for a remote GitHub/Gitlab repository
+      operationId: getRatingByRepo
+      tags:
+        - Ratings
+      parameters:
+        - name: org
+          in: path
+          required: true
+          description: GitHub/Gitlab organization or username
+          schema:
+            type: string
+            pattern: ^[a-zA-Z0-9._-]+$
+            maxLength: 39
+          examples:
+            default:
+              value: evil
+        - name: repo
+          in: path
+          required: true
+          description: GitHub/Gitlab repository name
+          schema:
+            type: string
+            pattern: ^[a-zA-Z0-9._-]+$
+            maxLength: 100
+          examples:
+            default:
+              value: repo
+        - $ref: "#/components/parameters/TimeoutQuery"
+        - $ref: "#/components/parameters/OrgUuidHeader"
+        - $ref: "#/components/parameters/HostUuidHeader"
+        - $ref: "#/components/parameters/PublishableAuthHeader"
+      responses:
+        "200":
+          description: Rating found
+          headers:
+            Last-Modified:
+              $ref: "#/components/headers/Last-Modified"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RatingResponse"
+              examples:
+                default:
+                  value:
+                    ratings:
+                      - name: evil/repo
+                        description: This repo has been compromised and performs Tool Poisoning Attacks.
+                        labels:
+                          - Malicious
+                          - ToolPoisoning
+                        classification: Malicious
+                        scores:
+                          overall_grade: F
+                          overall_percent: 0
+                          components:
+                            supply_chain: 90
+                            code_quality: 92
+                            maintenance: 100
+                            vulnerabilities: 0
+                          confidence: very_high
+                        identifiers:
+                          repo: evil/repo
+                        license: Apache-2.0
+                        vulnerabilities: []
+                        tool_calls_count: 3
+                        tool_calls:
+                          - name: get_emails
+                            description: Retrieve emails - Attempted Tool Poisoning attack on 1Password MCP.
+                          - name: get_passwords
+                            description: Retrieve passwords - Attempted Tool Poisoning attack on 1Password
+                              MCP.
+                          - name: get_credit_card_numbers
+                            description: Retrieve credit card numbers - Attempted Tool Poisoning attack on
+                              1Password MCP.
+                        last_updated: 2025-08-18T08:49:30.941Z
+                        source: heuristic
+        "202":
+          description: Scan in progress, check back soon
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanInProgress"
+              example:
+                scan_id: 123e4567-e89b-12d3-a456-426614174001
+                status: queued
+                estimated_completion: 2025-08-18T09:10:00Z
+                poll_url: /scan-status/123e4567-e89b-12d3-a456-426614174001
+          headers:
+            Location:
+              $ref: "#/components/headers/Location"
+            Retry-After:
+              $ref: "#/components/headers/Retry-After"
+            Cache-Control:
+              description: Caching policy for async receipt responses.
+              schema:
+                type: string
+              example: no-store
+        "400":
+          description: Invalid repository identifier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                default:
+                  value:
+                    error: INVALID_REPO
+                    message: Invalid repository or ref format.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/RatingNotAvailableOrNotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "406":
+          $ref: "#/components/responses/NotAcceptable"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        default:
+          $ref: "#/components/responses/DefaultError"
+  /ratings/oci/{image}:
+    get:
+      summary: Rating by Container image
+      description: Retrieve SecurityRating for a Container image
+      operationId: getRatingByOCI
+      tags:
+        - Ratings
+      parameters:
+        - name: image
+          in: path
+          required: true
+          description: Container image name with optional tag (URL encoded)
+          schema:
+            type: string
+            maxLength: 256
+            pattern: ^[A-Za-z0-9._\-/:@]+$
+          examples:
+            dockerhub:
+              value: mcpserver/filesystem:latest
+              description: Docker Hub image
+            ghcr:
+              value: ghcr.io/user/mcp-server:v1.0.0
+              description: GitHub Container Registry image
+        - $ref: "#/components/parameters/TimeoutQuery"
+        - $ref: "#/components/parameters/OrgUuidHeader"
+        - $ref: "#/components/parameters/HostUuidHeader"
+        - $ref: "#/components/parameters/PublishableAuthHeader"
+      responses:
+        "200":
+          description: Rating found
+          headers:
+            Last-Modified:
+              $ref: "#/components/headers/Last-Modified"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RatingResponse"
+              examples:
+                default:
+                  value:
+                    ratings:
+                      - name: ghcr.io/user/mcp-server:v1.0.0
+                        description: Community container image for an MCP server.
+                        labels:
+                          - Package Management
+                        classification: Suspicious
+                        scores:
+                          overall_grade: B
+                          overall_percent: 80
+                          components:
+                            supply_chain: 75
+                            code_quality: 82
+                            maintenance: 78
+                            vulnerabilities: 85
+                          confidence: medium
+                        identifiers:
+                          oci: ghcr.io/user/mcp-server:v1.0.0
+                        license: MIT
+                        vulnerabilities: []
+                        tool_calls_count: 3
+                        tool_calls:
+                          - name: inspect_image_manifest
+                            description: Parses and validates OCI image manifest.
+                            category: Read
+                            sensitive: false
+                          - name: check_vulnerabilities
+                            description: Checks image layers against CVE database.
+                            category: Read
+                            sensitive: false
+                          - name: verify_signature
+                            description: Verifies image signature (cosign/notary) if present.
+                            category: Read
+                            sensitive: false
+                        last_updated: 2025-08-18T08:49:30.941Z
+                        source: automated_scan
+        "202":
+          description: Scan in progress, check back soon
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanInProgress"
+              example:
+                scan_id: 123e4567-e89b-12d3-a456-426614174002
+                status: queued
+                estimated_completion: 2025-08-18T09:10:00Z
+                poll_url: /scan-status/123e4567-e89b-12d3-a456-426614174002
+          headers:
+            Location:
+              $ref: "#/components/headers/Location"
+            Retry-After:
+              $ref: "#/components/headers/Retry-After"
+            Cache-Control:
+              description: Caching policy for async receipt responses.
+              schema:
+                type: string
+              example: no-store
+        "400":
+          description: Invalid OCI image format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                default:
+                  value:
+                    error: INVALID_OCI_IMAGE
+                    message: Invalid OCI image reference format.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/RatingNotAvailableOrNotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "406":
+          $ref: "#/components/responses/NotAcceptable"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        default:
+          $ref: "#/components/responses/DefaultError"
+  /ratings/url/{url}:
+    get:
+      summary: Rating by URL
+      description: Retrieve SecurityRating for an MCP server endpoint URL
+      operationId: getRatingByUrl
+      tags:
+        - Ratings
+      parameters:
+        - name: url
+          in: path
+          required: true
+          description: MCP server URL (URL encoded). HTTP or HTTPS. HTTP is accepted but
+            considered insecure and will be flagged as a high security risk.
+          schema:
+            type: string
+            format: uri
+            maxLength: 2000
+            pattern: ^https?://.*
+          examples:
+            sse_server:
+              value: https://mcp.atlassian.com/v1/sse
+              description: Server-Sent Events MCP server
+            http_server:
+              value: http://api.example.com/mcp/v1
+              description: HTTP-based MCP server (insecure; allowed but flagged)
+        - $ref: "#/components/parameters/TimeoutQuery"
+        - $ref: "#/components/parameters/OrgUuidHeader"
+        - $ref: "#/components/parameters/HostUuidHeader"
+        - $ref: "#/components/parameters/PublishableAuthHeader"
+      responses:
+        "200":
+          description: Rating found
+          headers:
+            Last-Modified:
+              $ref: "#/components/headers/Last-Modified"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RatingResponse"
+              examples:
+                default:
+                  value:
+                    ratings:
+                      - name: https://mcp.atlassian.com/v1/sse
+                        description: Atlassian MCP SSE endpoint.
+                        labels:
+                          - NetworkAccess
+                          - SSE
+                        classification: Unknown
+                        scores:
+                          overall_grade: C
+                          overall_percent: 70
+                          components:
+                            supply_chain: 60
+                            code_quality: 70
+                            maintenance: 65
+                            vulnerabilities: 85
+                          confidence: low
+                        identifiers:
+                          server_url: https://mcp.atlassian.com/v1/sse
+                        license: MIT
+                        vulnerabilities: []
+                        tool_calls_count: 3
+                        tool_calls: []
+                        last_updated: 2025-08-18T08:49:30.941Z
+                        source: heuristic
+        "202":
+          description: Scan in progress, check back soon
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanInProgress"
+              example:
+                scan_id: 123e4567-e89b-12d3-a456-426614174003
+                status: queued
+                estimated_completion: 2025-08-18T09:10:00Z
+                poll_url: /scan-status/123e4567-e89b-12d3-a456-426614174003
+          headers:
+            Location:
+              $ref: "#/components/headers/Location"
+            Retry-After:
+              $ref: "#/components/headers/Retry-After"
+            Cache-Control:
+              description: Caching policy for async receipt responses.
+              schema:
+                type: string
+              example: no-store
+        "400":
+          description: Invalid URL format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                default:
+                  value:
+                    error: INVALID_URL
+                    message: Invalid URL format.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/RatingNotAvailableOrNotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "406":
+          $ref: "#/components/responses/NotAcceptable"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        default:
+          $ref: "#/components/responses/DefaultError"
+  /ratings/batch:
+    post:
+      summary: Ratings batch
+      description: Retrieve SecurityRating for multiple identifiers in one request
+      operationId: getRatingsBatch
+      tags:
+        - Ratings
+      parameters:
+        - $ref: "#/components/parameters/TimeoutQuery"
+        - $ref: "#/components/parameters/OrgUuidHeader"
+        - $ref: "#/components/parameters/HostUuidHeader"
+        - $ref: "#/components/parameters/PublishableAuthHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BatchRatingRequest"
+      responses:
+        "200":
+          description: Batch ratings response. All ratings immediately available - look at
+            per-item rating_url to get the full rating details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchRatingResponse"
+              examples:
+                default:
+                  value:
+                    ratings:
+                      - identifier:
+                          kind: purl
+                          value: pkg:npm/@modelcontextprotocol/server-filesystem@1.2.3
+                        rating_url: /ratings/purl/pkg%3Anpm%2F%40modelcontextprotocol%2Fserver-filesystem%401.2.3
+                      - identifier:
+                          kind: repo
+                          value: evil/repo
+                        rating_url: /ratings/repo/evil/repo
+        "202":
+          description: Batch scan started or in progress. Poll scan status at the URL
+            provided in the Location header.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanStatus"
+              example:
+                scan_id: 123e4567-e89b-12d3-a456-426614174000
+                status: queued
+                progress: 0
+                started_at: 2025-08-26T08:13:33.984Z
+                updated_at: null
+                completed_at: null
+                error_message: null
+                metrics:
+                  scan_duration_ms: null
+                  targets_total: 3
+                  targets_completed: 0
+                  targets_failed: 0
+                targets:
+                  - name: "@modelcontextprotocol/server-filesystem"
+                    identifier:
+                      kind: repo
+                      value: modelcontextprotocol/server-filesystem
+                    status: queued
+                    rating_url: null
+                    started_at: null
+                    completed_at: null
+                    error_message: null
+                  - name: "@modelcontextprotocol/server-openapi"
+                    identifier:
+                      kind: purl
+                      value: pkg:npm/@modelcontextprotocol/server-openapi
+                    status: queued
+                    rating_url: null
+                    started_at: null
+                    completed_at: null
+                    error_message: null
+                  - name: "@modelcontextprotocol/server-browser"
+                    identifier:
+                      kind: repo
+                      value: https://github.com/modelcontextprotocol/server-browser
+                    status: queued
+                    rating_url: null
+                    started_at: null
+                    completed_at: null
+                    error_message: null
+                links:
+                  self: /scan-status/123e4567-e89b-12d3-a456-426614174000
+          headers:
+            Location:
+              $ref: "#/components/headers/Location"
+            Retry-After:
+              $ref: "#/components/headers/Retry-After"
+            Cache-Control:
+              description: Caching policy for async receipt responses.
+              schema:
+                type: string
+              example: no-store
+        "400":
+          description: One or more identifiers cannot be processed. The request will not
+            be scanned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                invalid_request:
+                  value:
+                    error: INVALID_REQUEST
+                    message: Invalid request body.
+                not_processable:
+                  value:
+                    error: IDENTIFIERS_NOT_PROCESSABLE
+                    message: One or more identifiers cannot be processed.
+                    details:
+                      not_processable:
+                        - pkg:npm/%40scoped/bad%2Fname
+                        - repo:bad/repo name
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "406":
+          $ref: "#/components/responses/NotAcceptable"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        default:
+          $ref: "#/components/responses/DefaultError"
+  /scan-status/{scanId}:
+    get:
+      summary: Get scan status.
+      description: Returns the current lifecycle status of a scan and each target's
+        status. Detailed rating data is not embedded; follow per-target
+        rating_url to retrieve details.
+      operationId: getScanStatus
+      tags:
+        - Scanning
+      parameters:
+        - name: scanId
+          in: path
+          required: true
+          description: UUID of the scan.
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$
+        - $ref: "#/components/parameters/OrgUuidHeader"
+        - $ref: "#/components/parameters/HostUuidHeader"
+        - $ref: "#/components/parameters/PublishableAuthHeader"
+      responses:
+        "200":
+          description: Scan status.
+          headers:
+            Retry-After:
+              description: Suggested client polling interval in seconds while queued/running.
+              schema:
+                type: integer
+            ETag:
+              description: Entity tag for conditional requests.
+              schema:
+                type: string
+                pattern: ^(?:W\/)?"[^"\\]+"$
+                maxLength: 200
+            Last-Modified:
+              description: Timestamp of last modification for conditional requests.
+              schema:
+                type: string
+                format: date-time
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanStatus"
+              example:
+                scan_id: 123e4567-e89b-12d3-a456-426614174000
+                status: running
+                progress: 42
+                started_at: 2025-08-26T08:13:33.984Z
+                updated_at: 2025-08-26T08:14:01.000Z
+                completed_at: null
+                error_message: null
+                metrics:
+                  scan_duration_ms: null
+                  targets_total: 3
+                  targets_completed: 1
+                  targets_failed: 0
+                targets:
+                  - name: "@modelcontextprotocol/server-filesystem"
+                    identifier:
+                      kind: repo
+                      value: modelcontextprotocol/server-filesystem
+                    status: completed
+                    rating_url: /ratings/repo/modelcontextprotocol/server-filesystem
+                    started_at: 2025-08-26T08:13:33.984Z
+                    completed_at: 2025-08-26T08:14:10.120Z
+                    error_message: null
+                  - name: "@modelcontextprotocol/server-openapi"
+                    identifier:
+                      kind: purl
+                      value: pkg:npm/@modelcontextprotocol/server-openapi
+                    status: running
+                    rating_url: null
+                    started_at: 2025-08-26T08:13:40.000Z
+                    completed_at: null
+                    error_message: null
+                  - name: "@modelcontextprotocol/server-browser"
+                    identifier:
+                      kind: url
+                      value: https://github.com/modelcontextprotocol/server-browser
+                    status: queued
+                    rating_url: null
+                    started_at: null
+                    completed_at: null
+                    error_message: null
+                links:
+                  self: /scan-status/123e4567-e89b-12d3-a456-426614174000
+        "400":
+          description: Invalid path parameter.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ScanNotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "406":
+          $ref: "#/components/responses/NotAcceptable"
+        "410":
+          $ref: "#/components/responses/ScanExpired"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/DefaultError"
+components:
+  securitySchemes:
+    PublishableKeyAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: publishable
+      description: >
+        Publishable key required in Authorization header. Format:
+        ^ens_pk_live_[a-f0-9]{40}$
+  headers:
+    Location:
+      description: URL path to poll for the asynchronous operation result.
+      schema:
+        type: string
+        format: uri-reference
+        pattern: ^\/scan-status\/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$
+        maxLength: 49
+    Retry-After:
+      description: Seconds to wait before polling again.
+      schema:
+        type: integer
+        format: int32
+    Last-Modified:
+      description: Timestamp of last modification for conditional requests.
+      schema:
+        type: string
+        format: date-time
+  parameters:
+    PublishableAuthHeader:
+      name: Authorization
+      in: header
+      required: true
+      description: "Bearer publishable key (format: ^ens_pk_live_[a-f0-9]{40}$)"
+      schema:
+        type: string
+        pattern: ^Bearer\s+ens_pk_live_[a-f0-9]{40}$
+    OrgUuidHeader:
+      name: X-Org-Uuid
+      in: header
+      required: false
+      description: Optional organization UUID for usage reporting
+      schema:
+        type: string
+        format: uuid
+        pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$
+      examples:
+        example:
+          value: 123e4567-e89b-12d3-a456-426614174000
+    HostUuidHeader:
+      name: X-Host-Uuid
+      in: header
+      required: false
+      description: Optional host UUID for usage reporting
+      schema:
+        type: string
+        format: uuid
+        pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$
+      examples:
+        example:
+          value: 123e4567-e89b-12d3-a456-426614174111
+    TimeoutQuery:
+      name: timeout
+      in: query
+      required: false
+      description: Maximum time to wait for scan completion (seconds)
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 30
+        default: 10
+      examples:
+        default:
+          value: 10
+  responses:
+    MethodNotAllowed:
+      description: Method not allowed.
+      headers:
+        Allow:
+          description: Comma-separated list of allowed methods.
+          schema:
+            type: string
+            pattern: ^(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)(?:,
+              (?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS))*$
+            maxLength: 200
+    RateLimited:
+      description: Too many requests.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            default:
+              value:
+                error: RATE_LIMITED
+                message: Too many requests; please retry later.
+      headers:
+        Retry-After:
+          description: Seconds to wait before retrying
+          schema:
+            type: integer
+            format: int32
+        X-RateLimit-Limit:
+          description: The maximum number of requests allowed in the current window.
+          schema:
+            type: integer
+            format: int32
+        X-RateLimit-Remaining:
+          description: The number of requests remaining in the current window.
+          schema:
+            type: integer
+            format: int32
+        X-RateLimit-Reset:
+          description: UTC epoch seconds when the current rate limit window resets.
+          schema:
+            type: integer
+            format: int64
+    ServiceUnavailable:
+      description: Service temporarily unavailable (e.g., queue disabled or enqueue
+        failure).
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/Retry-After"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            queue_disabled:
+              value:
+                error: QUEUE_DISABLED
+                message: Scanner queue is disabled.
+            enqueue_failed:
+              value:
+                error: ENQUEUE_FAILED
+                message: Failed to enqueue rating job(s). Please try again later.
+    Unauthorized:
+      description: Missing, invalid, or unknown publishable key.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            missing:
+              value:
+                error: UNAUTHORIZED
+                message: A valid publishable key is required to access this API.
+                details:
+                  how_to_authenticate:
+                    headers:
+                      - "authorization: Bearer <publishable_key>"
+            malformed:
+              value:
+                error: UNAUTHORIZED
+                message: Publishable key is malformed.
+                details:
+                  expected_regex: ^ens_pk_live_[a-f0-9]{40}$
+    NotAcceptable:
+      description: The requested media type cannot be produced (Accept header unsupported).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            default:
+              value:
+                error: NOT_ACCEPTABLE
+                message: Accept header must allow application/json.
+                details:
+                  accept: text/html
+                  supported:
+                    - application/json
+    UnsupportedMediaType:
+      description: The request body media type is not supported (Content-Type).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            default:
+              value:
+                error: UNSUPPORTED_MEDIA_TYPE
+                message: Content-Type must be application/json.
+                details:
+                  content_type: text/plain
+                  supported:
+                    - application/json
+    DefaultError:
+      description: An unexpected error occurred.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    RatingNotAvailableOrNotFound:
+      description: Rating not available or not returned.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            wont_scan:
+              value:
+                error: RATING_NOT_AVAILABLE
+                message: Unable to return a rating for this resource.
+    ScanNotFound:
+      description: Scan not found.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            unknown_scan:
+              value:
+                error: SCAN_NOT_FOUND
+                message: No scan found with this identifier.
+    ScanExpired:
+      description: Scan expired.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            expired_scan:
+              value:
+                error: SCAN_EXPIRED
+                message: Scan has expired and is no longer available.
+  schemas:
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - timestamp
+        - version
+        - api_spec_version
+        - server_version
+        - services
+        - capabilities
+      properties:
+        status:
+          type: string
+          enum:
+            - healthy
+            - degraded
+            - unhealthy
+          description: Overall service health status
+        timestamp:
+          type: string
+          format: date-time
+          description: Health check timestamp
+        version:
+          type: string
+          description: API spec version.
+          pattern: ^[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,3}?$
+          example: 0.0.9
+        api_spec_version:
+          type: string
+          description: Duplicate of API spec version for explicitness.
+          pattern: ^[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,3}?$
+          example: 0.0.9
+        server_version:
+          type: string
+          description: Deployed server implementation version.
+          pattern: ^[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,3}?$
+          example: 1.0.0
+        services:
+          type: object
+          additionalProperties: false
+          properties:
+            database:
+              type: string
+              enum:
+                - healthy
+                - degraded
+                - unhealthy
+            scanner_queue:
+              type: string
+              enum:
+                - healthy
+                - degraded
+                - unhealthy
+        capabilities:
+          type: object
+          additionalProperties: false
+          properties:
+            ratings_lookup:
+              type: boolean
+            async_scanning:
+              type: boolean
+            batch_operations:
+              type: boolean
+        warnings:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            pattern: ^.{1,200}$
+          description: Non-critical issues
+        errors:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            pattern: ^.{1,200}$
+          description: Critical issues (when status is unhealthy)
+    SecurityRating:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - description
+        - scores
+        - classification
+        - last_updated
+        - source
+      properties:
+        name:
+          type: string
+          description: MCP server name.
+          minLength: 1
+          maxLength: 100
+          pattern: ^.{1,100}$
+          example: "@modelcontextprotocol/server-filesystem"
+        version:
+          type: string
+          description: Server version.
+          pattern: ^[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,3}?$
+          example: 1.2.3
+        description:
+          type: string
+          description: Human-readable summary of what the server provides and how it
+            integrates.
+          minLength: 1
+          maxLength: 1000
+          pattern: ^.{1,1000}$
+        labels:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            minLength: 1
+            maxLength: 40
+            pattern: ^.{1,40}$
+          description: Tags describing capabilities or domains (e.g., CI/CD, Development,
+            Code Scanning, Package Management).
+        classification:
+          type: string
+          description: Security classification for the server.
+          enum:
+            - Allowed
+            - Benign
+            - Suspicious
+            - Malicious
+            - Unknown
+        scores:
+          type: object
+          additionalProperties: false
+          required:
+            - overall_grade
+            - components
+          properties:
+            overall_grade:
+              type: string
+              description: Letter grade summarizing security posture.
+              enum:
+                - A+
+                - A
+                - A-
+                - B+
+                - B
+                - B-
+                - C+
+                - C
+                - C-
+                - D
+                - F
+            overall_percent:
+              type: integer
+              format: int32
+              minimum: 0
+              maximum: 100
+              description: Overall score as a percentage.
+            components:
+              type: object
+              additionalProperties: false
+              properties:
+                supply_chain:
+                  type: integer
+                  format: int32
+                  minimum: 0
+                  maximum: 100
+                code_quality:
+                  type: integer
+                  format: int32
+                  minimum: 0
+                  maximum: 100
+                maintenance:
+                  type: integer
+                  format: int32
+                  minimum: 0
+                  maximum: 100
+                vulnerabilities:
+                  type: integer
+                  format: int32
+                  minimum: 0
+                  maximum: 100
+              description: Score breakdown by signal area.
+            confidence:
+              type: string
+              enum:
+                - low
+                - medium
+                - high
+                - very_high
+              description: Confidence level in the computed scores.
+        permissions:
+          type: object
+          additionalProperties: false
+          properties:
+            network_access:
+              type: boolean
+              description: Server or tools can access the network.
+            filesystem_read:
+              type: boolean
+              description: Server or tools can read the filesystem.
+            filesystem_write:
+              type: boolean
+              description: Server or tools can write to the filesystem.
+          description: Capability-related security permissions.
+        identifiers:
+          type: object
+          additionalProperties: false
+          properties:
+            server_url:
+              type: string
+              format: uri
+              description: MCP server base URL if known.
+              pattern: ^https?:\/\/.*$
+              maxLength: 2000
+            purl:
+              type: string
+              pattern: ^pkg:.*$
+              description: Package URL if known.
+              maxLength: 512
+            oci:
+              type: string
+              pattern: ^[A-Za-z0-9._\-\/:@]+$
+              description: OCI image reference if known.
+              maxLength: 256
+            repo:
+              type: string
+              pattern: ^(?:[A-Za-z0-9._\-]+\/[A-Za-z0-9._\-]+|https?:\/\/.*)$
+              description: GitHub/GitLab repository if known (org/repo or full URL).
+              maxLength: 2000
+          description: Consolidated identifiers discovered for this server.
+        license:
+          type: string
+          description: Detected software license identifier (e.g., MIT, Apache-2.0).
+          enum:
+            - MIT
+            - Apache-2.0
+            - BSD-2-Clause
+            - BSD-3-Clause
+            - GPL-2.0-only
+            - GPL-2.0-or-later
+            - GPL-3.0-only
+            - GPL-3.0-or-later
+            - LGPL-2.1-only
+            - LGPL-2.1-or-later
+            - LGPL-3.0-only
+            - LGPL-3.0-or-later
+            - MPL-2.0
+            - EPL-2.0
+            - AGPL-3.0-only
+            - AGPL-3.0-or-later
+            - Unlicense
+            - CC0-1.0
+        vulnerabilities:
+          type: array
+          maxItems: 1000
+          items:
+            type: string
+            pattern: ^CVE-[0-9]{4}-[0-9]{4,7}$
+          description: Known CVEs or security issues.
+          example:
+            - CVE-2024-1234
+        tool_calls_count:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 100
+          description: Number of available tool calls reported by the server.
+        tool_calls:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              name:
+                type: string
+                description: Tool call name.
+                pattern: ^.{1,128}$
+              description:
+                type: string
+                description: Human-readable tool description.
+                pattern: ^.{1,1000}$
+              category:
+                type: string
+                description: Action category (e.g., Create, Read, Update, Delete). Optional.
+                pattern: ^.{0,32}$
+              sensitive:
+                type: boolean
+                description: Whether the tool is considered sensitive.
+          description: Catalog of available tool calls.
+        last_updated:
+          type: string
+          format: date-time
+          description: When this rating was last updated.
+        source:
+          type: string
+          enum:
+            - automated_scan
+            - manual_review
+            - community_report
+            - heuristic
+          description: How this rating was determined.
+        scan_details:
+          type: object
+          additionalProperties: false
+          description: Additional scan metadata.
+          properties:
+            scan_duration_ms:
+              type: integer
+              format: int64
+              minimum: 0
+              maximum: 86400000
+            scanned_files:
+              type: integer
+              format: int32
+              minimum: 0
+              maximum: 1000000
+            static_analysis_score:
+              type: number
+              minimum: 0
+              maximum: 10
+              multipleOf: 0.1
+    ScanInProgress:
+      type: object
+      additionalProperties: false
+      required:
+        - scan_id
+        - status
+        - estimated_completion
+      properties:
+        scan_id:
+          type: string
+          format: uuid
+          description: Unique scan identifier for polling
+          maxLength: 36
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$
+        status:
+          type: string
+          enum:
+            - queued
+            - scanning
+          description: Current scan status
+        estimated_completion:
+          type: string
+          format: date-time
+          description: Estimated completion time
+        poll_url:
+          type: string
+          format: uri-reference
+          description: URL path to poll for updates
+          pattern: ^\/scan-status\/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$
+          maxLength: 49
+          example: /scan-status/123e4567-e89b-12d3-a456-426614174000
+      example:
+        scan_id: 6f8e1f8a-7d20-4b2a-bd3a-2d2af0b1a9c0
+        status: scanning
+        estimated_completion: 2025-08-18T09:10:00Z
+        poll_url: /scan-status/6f8e1f8a-7d20-4b2a-bd3a-2d2af0b1a9c0
+    ScanStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - scan_id
+        - status
+        - targets
+        - started_at
+      properties:
+        scan_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$
+          maxLength: 36
+        status:
+          type: string
+          description: Aggregate status across all targets.
+          enum:
+            - queued
+            - running
+            - partial
+            - completed
+            - failed
+            - canceled
+        progress:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 100
+          description: Aggregate completion percentage across targets.
+        started_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        error_message:
+          type: string
+          maxLength: 1000
+          nullable: true
+        metrics:
+          $ref: "#/components/schemas/ScanMetrics"
+        targets:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/ScanTarget"
+        links:
+          type: object
+          additionalProperties: false
+          properties:
+            self:
+              type: string
+              format: uri-reference
+              pattern: ^\/scan-status\/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$
+              maxLength: 49
+    ScanMetrics:
+      type: object
+      additionalProperties: false
+      properties:
+        scan_duration_ms:
+          type: integer
+          format: int64
+          nullable: true
+        targets_total:
+          type: integer
+          format: int32
+        targets_completed:
+          type: integer
+          format: int32
+        targets_failed:
+          type: integer
+          format: int32
+    ScanTarget:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - identifier
+        - status
+      properties:
+        name:
+          type: string
+          description: Human-friendly target label (e.g., package or server name).
+          pattern: ^.{1,200}$
+        identifier:
+          $ref: "#/components/schemas/TargetIdentifier"
+        status:
+          type: string
+          enum:
+            - queued
+            - running
+            - completed
+            - failed
+            - skipped
+        rating_url:
+          type: string
+          format: uri-reference
+          description: URL path to fetch full rating details for this target when status
+            is completed.
+          pattern: ^\/ratings\/(?:purl|repo|oci|url)\/.*$
+          maxLength: 2000
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        error_message:
+          type: string
+          pattern: ^.{0,1000}$
+          nullable: true
+    IdentifierKind:
+      type: string
+      description: Type of identifier.
+      enum:
+        - purl
+        - repo
+        - oci
+        - url
+    TargetIdentifier:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - value
+      properties:
+        kind:
+          $ref: "#/components/schemas/IdentifierKind"
+        value:
+          type: string
+          pattern: ^(pkg:.*|[A-Za-z0-9._\-]+\/[A-Za-z0-9._\-]+|[A-Za-z0-9._\-\/:@]+|https?:\/\/.*)$
+          maxLength: 2000
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          pattern: ^[A-Z0-9_]{3,64}$
+        message:
+          type: string
+          pattern: ^.{1,200}$
+        details:
+          type: object
+          additionalProperties: true
+    BatchRatingRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - identifiers
+      properties:
+        identifiers:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/TargetIdentifier"
+          example:
+            - kind: purl
+              value: pkg:npm/@modelcontextprotocol/server-filesystem@1.2.3
+        timeout:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 30
+          default: 10
+          description: Max wait time for any individual scan
+    RatingResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - ratings
+      properties:
+        ratings:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/SecurityRating"
+          description: Successfully retrieved ratings
+        links:
+          type: object
+          additionalProperties: false
+          description: Optional navigation links related to this batch request.
+          properties:
+            scan_status:
+              type: string
+              format: uri-reference
+              description: URL to the scan-status resource tracking any pending work for this
+                batch.
+              pattern: ^\/scan-status\/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$
+              maxLength: 49
+            ratings:
+              type: array
+              maxItems: 50
+              description: Per-item rating links for convenience.
+              items:
+                type: object
+                additionalProperties: false
+                required:
+                  - rating_url
+                properties:
+                  name:
+                    type: string
+                    description: Optional human-friendly name for the rated item.
+                    pattern: ^.{1,100}$
+                  rating_url:
+                    type: string
+                    format: uri-reference
+                    description: URL path to fetch full rating details for this item.
+                    pattern: ^\/ratings\/(?:purl|repo|oci|url)\/.*$
+                    maxLength: 2000
+    BatchRatingResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - ratings
+      properties:
+        ratings:
+          type: array
+          maxItems: 50
+          description: Per-item rating link results for the requested identifiers.
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - identifier
+              - rating_url
+            properties:
+              identifier:
+                $ref: "#/components/schemas/TargetIdentifier"
+              rating_url:
+                type: string
+                format: uri-reference
+                description: URL path to fetch full rating details for this item.
+                pattern: ^\/ratings\/(?:purl|repo|oci|url)\/.*$
+                maxLength: 2000
+    Error:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error code
+          pattern: ^[A-Z0-9_]{3,64}$
+          example: UNKNOWN_ERROR
+        message:
+          type: string
+          description: Human-readable error message
+          pattern: ^.{1,1000}$
+          example: Invalid requested media type.
+        details:
+          type: object
+          additionalProperties: true
+          description: Additional error context
+        request_id:
+          type: string
+          description: Unique request identifier for debugging
+          pattern: ^[A-Za-z0-9._\-]{6,128}$

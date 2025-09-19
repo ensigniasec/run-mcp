@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "[pre-commit] Running fmt, vet, lint, and api types check..."
+
+if command -v task >/dev/null 2>&1; then
+  task ci
+else
+  echo "[pre-commit] 'task' not found, running minimal checks"
+  go fmt ./...
+  go vet ./...
+  go mod tidy
+  if command -v golangci-lint >/dev/null 2>&1; then
+    golangci-lint run
+  fi
+  # Ensure generated types are up-to-date
+  if command -v oapi-codegen >/dev/null 2>&1; then
+    oapi-codegen -config internal/api-gen/oapi.codegen.yaml docs/api-spec.yaml >/dev/null 2>&1 || true
+    git diff --exit-code -- internal/api-gen/types.gen.go
+  fi
+fi
+
+echo "[pre-commit] OK"
+

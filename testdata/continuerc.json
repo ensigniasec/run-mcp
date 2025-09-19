@@ -1,0 +1,23 @@
+{
+  "mcp": {
+    "local_tools": {
+      "command": "node",
+      "args": ["tools-server.js"],
+      "type": "stdio"
+    },
+    "remote_api": {
+      "type": "http", 
+      "url": "https://api.example.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer token123"
+      }
+    }
+  },
+  "models": [
+    {
+      "title": "GPT-4",
+      "provider": "openai",
+      "model": "gpt-4"
+    }
+  ]
+}

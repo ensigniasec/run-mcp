@@ -1,0 +1,5 @@
+[submodule "tui/bubbletea"]
+	path = tui/bubbletea
+	url = https://github.com/charmbracelet/bubbletea.git
+	branch = main
+	shallow = true

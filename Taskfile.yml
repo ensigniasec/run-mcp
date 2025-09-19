@@ -1,0 +1,355 @@
+version: '3'
+
+vars:
+  BINARY_NAME: run-mcp
+  MAIN_PACKAGE: ./cmd/run-mcp
+  BUILD_DIR: ./build
+  COVERAGE_DIR: ./coverage
+
+tasks:
+  api-spec:check:
+    desc: Check that generated OpenAPI types are up-to-date
+    cmds:
+      - |
+        tmpfile=$(mktemp) && \
+        curl -fsSL \
+          -H "Accept: application/json" \
+          "https://registry.scalar.com/@ensignia/apis/mcp-api/latest?format=yaml" \
+          -o "$tmpfile" && \
+        if ! diff -q "$tmpfile" docs/api-spec.yaml > /dev/null; then \
+          echo "docs/api-spec.yaml is not up-to-date with remote latest. Run: task api-spec:pull"; \
+          diff -u docs/api-spec.yaml "$tmpfile" | sed -n '1,200p'; \
+          rm -f "$tmpfile"; \
+          exit 1; \
+        fi; \
+        rm -f "$tmpfile"
+      - task api-spec:gen
+      - git diff --exit-code -- internal/api-gen/types.gen.go
+
+  api-spec:contract-test:
+    desc: Run contract tests against a running mock (set API_BASE_URL if not localhost)
+    cmds:
+      - API_BASE_URL=${API_BASE_URL:-http://run-mcp-mock:3000/api/v1} go test ./internal/api -run TestContract_WithOpenAPIMock -v
+
+  api-spec:gen:
+    desc: Generate OpenAPI types (types-only) via oapi-codegen
+    cmds:
+      - go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.5.0
+      - oapi-codegen -config internal/api-gen/oapi.codegen.yaml docs/api-spec.yaml
+    sources:
+      - docs/api-spec.yaml
+      - internal/api-gen/oapi.codegen.yaml
+    generates:
+      - internal/api-gen/types.gen.go
+
+  api-spec:gen:client:
+    desc: "Generate OpenAPI client via oapi-codegen - NOTE: we don't actually use the client, but it's good to have for reference."
+    cmds:
+      - go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.5.0
+      - oapi-codegen -config internal/api-gen/oapi.codegen.client.yaml docs/api-spec.yaml
+    sources:
+      - docs/api-spec.yaml
+      - internal/api-gen/oapi.codegen.client.yaml
+    generates:
+      - internal/api-gen/client.gen.go
+
+  api-spec:pull:
+    desc: Pull PROD OpenAPI spec from Scalar and save to docs/api-spec.yaml
+    cmds:
+      - |
+        mkdir -p api
+        curl -fsSL \
+          -H "Accept: application/json" \
+          "https://registry.scalar.com/@ensignia/apis/mcp-api/latest?format=yaml" \
+          -o docs/api-spec.yaml | cat
+
+  api-spec:refresh:
+    desc: Pull latest spec, generate types, and run check
+    cmds:
+      - task api-spec:pull
+      - task api-spec:gen
+
+  server-schema:pull:
+    desc: Pull latest MCP server.schema.json from ModelContextProtocol upstream
+    cmds:
+      - |
+        mkdir -p docs
+        curl -fsSL \
+          "https://raw.githubusercontent.com/modelcontextprotocol/registry/refs/heads/main/docs/reference/server-json/server.schema.json" \
+          -o docs/server-schema.json | cat
+
+  server-schema:check:
+    desc: Check that docs/server-schema.json matches upstream latest
+    cmds:
+      - |
+        tmpfile=$(mktemp) && \
+        curl -fsSL \
+          "https://raw.githubusercontent.com/modelcontextprotocol/registry/refs/heads/main/docs/reference/server-json/server.schema.json" \
+          -o "$tmpfile" && \
+        if ! diff -q "$tmpfile" docs/server-schema.json > /dev/null; then \
+          echo "docs/server-schema.json is not up-to-date with upstream. Run: task mcp-schema:pull"; \
+          diff -u docs/server-schema.json "$tmpfile" | sed -n '1,200p'; \
+          rm -f "$tmpfile"; \
+          exit 1; \
+        fi; \
+        rm -f "$tmpfile"
+
+  bench:
+    desc: Run benchmarks
+    cmds:
+      - go test ./... -bench=. -benchmem
+
+  build:
+    desc: Build the application
+    cmds:
+      - mkdir -p "{{.BUILD_DIR}}"
+      - go build -ldflags "-X github.com/ensigniasec/run-mcp/internal/api.BuildVersion=${VERSION:-dev} -X github.com/ensigniasec/run-mcp/internal/api.BuildCommit=$(git rev-parse --short HEAD 2>/dev/null || echo none) -X github.com/ensigniasec/run-mcp/internal/api.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ) -X main.releaseVersion=${VERSION:-dev} -X main.commit=$(git rev-parse --short HEAD 2>/dev/null || echo none) -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o {{.BUILD_DIR}}/{{.BINARY_NAME}} {{.MAIN_PACKAGE}}
+    generates:
+      - "{{.BUILD_DIR}}/{{.BINARY_NAME}}"
+
+  build-release:
+    desc: Build release version with optimizations
+    cmds:
+      - mkdir -p "{{.BUILD_DIR}}"
+      - go build -ldflags "-s -w -X github.com/ensigniasec/run-mcp/internal/api.BuildVersion=${VERSION:-dev} -X github.com/ensigniasec/run-mcp/internal/api.BuildCommit=$(git rev-parse --short HEAD 2>/dev/null || echo none) -X github.com/ensigniasec/run-mcp/internal/api.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ) -X main.releaseVersion=${VERSION:-dev} -X main.commit=$(git rev-parse --short HEAD 2>/dev/null || echo none) -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o {{.BUILD_DIR}}/{{.BINARY_NAME}} {{.MAIN_PACKAGE}}
+    generates:
+      - "{{.BUILD_DIR}}/{{.BINARY_NAME}}"
+
+  capslock:install:
+    desc: Install Capslock capability analyzer
+    cmds:
+      - go install github.com/google/capslock/cmd/capslock@latest
+
+  capslock:run:
+    desc: Run Capslock by cd'ing into each Go package directory
+    deps:
+      - capslock:install
+    cmds:
+      - |
+        PKG_DIRS=$(go list -f '{{.Dir}}' ./... | sort -u)
+        for dir in $PKG_DIRS; do
+          echo "--- Running capslock in $dir ---"
+          (cd "$dir" && capslock | sed -n '1,200p')
+        done
+
+  capslock:run:pkg:
+    desc: "Run Capslock in a specific package directory (usage: task capslock:run:pkg PKG=./internal/api)"
+    vars:
+      PKG: ""
+    deps:
+      - capslock:install
+    cmds:
+      - |
+        DIR=$(go list -f '{{.Dir}}' {{.PKG}})
+        echo "--- Running capslock in $DIR ---"
+        (cd "$DIR" && capslock | sed -n '1,200p')
+
+  check:
+    desc: Run all checks (fmt, vet, lint, test)
+    deps:
+      - fmt
+      - vet
+      - lint
+      - api-spec:check
+      - api-spec:contract-test
+      - test-all
+
+  ci:
+    desc: Run CI pipeline (check + coverage)
+    deps:
+      - check
+      - test-coverage
+
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  deps:
+    desc: Download dependencies
+    cmds:
+      - go mod download
+
+  dev:
+    desc: Development build and run
+    deps:
+      - build
+    cmds:
+      - "{{.BUILD_DIR}}/{{.BINARY_NAME}} --help"
+
+  fmt:
+    desc: Format code
+    cmds:
+      - go fmt ./...
+
+  hooks:install:
+    desc: Configure Git to use repository hooks from .githooks.
+    cmds:
+      - |
+        git config core.hooksPath .githooks
+        echo "Git hooks path set to .githooks."
+  install:
+    desc: Install the application
+    cmds:
+      - go install {{.MAIN_PACKAGE}}
+
+  lint:
+    desc: Run linter
+    cmds:
+      - golangci-lint run
+
+  lint-fix:
+    desc: Run linter with auto-fix
+    cmds:
+      - golangci-lint run --fix
+
+  mod-update:
+    desc: Update module dependencies
+    cmds:
+      - go get -u ./...
+      - go mod tidy
+      - go mod verify
+
+  mod-tidy:
+    desc: Tidy module dependencies
+    cmds:
+      - go mod tidy
+
+  mod-verify:
+    desc: Verify module dependencies
+    cmds:
+      - go mod verify
+
+  pin-dependencies:
+    desc: Pin Go dependencies (tidy, verify, vendor, and run pmw)
+    cmds:
+      - go mod tidy
+      - go mod verify
+      - go run github.com/santrancisco/pmw@v0.0.4
+
+  scan-example:
+    desc: Run scan on testdata
+    deps:
+      - build
+    cmds:
+      - "{{.BUILD_DIR}}/{{.BINARY_NAME}} scan testdata/"
+
+  test:
+    desc: Run tests
+    cmds:
+      - go test ./...
+
+  test-all:
+    desc: Run all tests (normal and race)
+    cmds:
+      - task test
+      - task test-race
+
+  test-coverage:
+    desc: Run tests with coverage
+    cmds:
+      - mkdir -p {{.COVERAGE_DIR}}
+      - go test ./... -coverprofile={{.COVERAGE_DIR}}/coverage.out
+      - go tool cover -html={{.COVERAGE_DIR}}/coverage.out -o {{.COVERAGE_DIR}}/coverage.html
+    generates:
+      - "{{.COVERAGE_DIR}}/coverage.out"
+      - "{{.COVERAGE_DIR}}/coverage.html"
+
+  test-race:
+    desc: Run tests with race detection
+    cmds:
+      - go test ./... -race
+
+  test-short:
+    desc: Run tests with short flag
+    cmds:
+      - go test ./... -short
+
+  test-verbose:
+    desc: Run all tests with verbose flag
+    cmds:
+      - go test ./... -v
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  watch:
+    desc: Watch for changes and rebuild
+    cmds:
+      - |
+        while true; do
+          find . -name "*.go" | entr -d -r task build
+        done
+
+  zizmor:
+    desc: Run zizmor against .github/workflows
+    cmds:
+      - |
+        if ! command -v zizmor >/dev/null 2>&1; then
+          echo "zizmor not found on PATH. Please install zizmor (e.g., pipx/pip) and try again."
+          exit 1
+        fi
+        zizmor .github/workflows ${ZIZMOR_ARGS:-}
+
+  oss:mirror:
+    desc: "Manually mirror filtered snapshot to public repo using local Git creds"
+    vars:
+      PUBLIC_REPO: '{{.PUBLIC_REPO | default "git@github.com:ensignia/run-mcp.git"}}'
+    cmds:
+      - |
+        set -euo pipefail
+        SRC_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo local)
+        OSS_DIR=$(mktemp -d)
+        PUBLIC_DIR=$(mktemp -d)
+        echo "Building filtered snapshot into $OSS_DIR ..."
+        rsync -a --delete \
+          --exclude 'enterprise/' \
+          --exclude '.github/workflows/internal/**' \
+          --exclude '.git/' \
+          ./ "$OSS_DIR"/
+        echo "Cloning public repo {{.PUBLIC_REPO}} into $PUBLIC_DIR ..."
+        git clone "{{.PUBLIC_REPO}}" "$PUBLIC_DIR"
+        cd "$PUBLIC_DIR"
+        git fetch origin main || true
+        git checkout -B main origin/main || git checkout main
+        echo "Syncing snapshot into public working tree ..."
+        rsync -a --delete "$OSS_DIR"/ ./
+        if [ -n "$(git status --porcelain)" ]; then
+          msg="Sync from $(basename $(git rev-parse --show-toplevel 2>/dev/null || echo .))@$SRC_SHA"
+          git add -A
+          git commit -m "$msg"
+          git push origin main
+          echo "Pushed updates to public main."
+        else
+          echo "No changes to sync"
+        fi
+
+  oss:release:
+    desc: "Sync snapshot and create a tag in the public repo (use local creds)"
+    vars:
+      TAG: ""
+      PUBLIC_REPO: '{{.PUBLIC_REPO | default "git@github.com:ensignia/run-mcp.git"}}'
+    cmds:
+      - |
+        set -euo pipefail
+        if [ -z "{{.TAG}}" ]; then
+          echo "TAG is required. Usage: task oss:release TAG=vX.Y.Z [PUBLIC_REPO=git@github.com:org/repo.git]" >&2
+          exit 1
+        fi
+        # First mirror the latest snapshot
+        task oss:mirror PUBLIC_REPO='{{.PUBLIC_REPO}}'
+        SRC_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo local)
+        PUBLIC_DIR=$(mktemp -d)
+        echo "Cloning public repo {{.PUBLIC_REPO}} into $PUBLIC_DIR ..."
+        git clone "{{.PUBLIC_REPO}}" "$PUBLIC_DIR"
+        cd "$PUBLIC_DIR"
+        git fetch origin --tags
+        if git rev-parse "{{.TAG}}" >/dev/null 2>&1; then
+          echo "Tag {{.TAG}} already exists in public mirror"
+        else
+          git tag -a "{{.TAG}}" -m "Mirror release {{.TAG}} from private $SRC_SHA"
+          git push origin "{{.TAG}}"
+          echo "Pushed tag {{.TAG}} to public mirror"
+        fi

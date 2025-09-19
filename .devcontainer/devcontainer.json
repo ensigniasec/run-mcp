@@ -1,0 +1,30 @@
+{
+  "name": "run-mcp",
+  "dockerComposeFile": ["docker-compose.yml"],
+  "service": "app",
+  "workspaceFolder": "/workspaces/run-mcp",
+  "shutdownAction": "stopCompose",
+  "remoteUser": "vscode",
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/go:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "go.toolsManagement.autoUpdate": true,
+        "go.useLanguageServer": true,
+        "go.gopath": "/go",
+        "go.testFlags": ["-v"],
+        "editor.formatOnSave": true,
+        "go.lintOnSave": "on"
+      },
+      "extensions": [
+        "golang.go",
+        "github.vscode-github-actions",
+        "ms-azuretools.vscode-docker"
+      ]
+    }
+  },
+  "postCreateCommand": "echo \"GO VERSION: $(go version)\" && go mod download && git config core.hooksPath .githooks && chmod +x .githooks/*"
+}

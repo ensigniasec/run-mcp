@@ -1,0 +1,11 @@
+mcp:
+  test_server:
+    command: "node"
+    args: ["server.js"]
+    type: "stdio"
+  python_server:
+    command: "python"
+    args: ["-m", "mcp_server"]
+    type: "stdio"
+    env:
+      PYTHONPATH: "/path/to/server"

@@ -1,0 +1,5 @@
+mcp_servers:
+  test:
+    command: "node"
+    args: ["server.js"
+    # Missing closing bracket - malformed YAML

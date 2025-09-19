@@ -1,0 +1,4 @@
+package: apigen
+output: internal/api-gen/types.gen.go
+generate:
+  - types

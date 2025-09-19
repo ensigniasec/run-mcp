@@ -1,0 +1,25 @@
+{
+  "mcp": {
+    "servers": {
+      "filesystem": {
+        "stdio": {
+          "command": [
+            "npx",
+            "-y",
+            "@modelcontextprotocol/server-filesystem",
+            "/Users/test/workspace"
+          ]
+        }
+      },
+      "memory": {
+        "stdio": {
+          "command": [
+            "npx",
+            "-y",
+            "@modelcontextprotocol/server-memory"
+          ]
+        }
+      }
+    }
+  }
+}

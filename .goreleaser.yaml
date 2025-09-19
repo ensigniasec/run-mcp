@@ -1,0 +1,231 @@
+# This is an example .goreleaser.yml file with some sensible defaults.
+# Make sure to check the documentation at https://goreleaser.com
+
+# The lines below are called `modelines`. See `:help modeline`
+# Feel free to remove those if you don't want/need to use them.
+# yaml-language-server: $schema=https://goreleaser.com/static/schema-pro.json
+# vim: set ts=2 sw=2 tw=0 fo=cnqoj
+
+version: 2
+
+project_name: run-mcp
+
+before:
+  hooks:
+    # You may remove this if you don't use go modules.
+    - go mod tidy
+    # you may remove this if you don't need go generate
+    - go generate ./...
+
+builds:
+  - main: ./cmd/run-mcp
+    id: run-mcp
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: archives
+    formats: [tar.gz]
+    # this name template makes the OS and Arch compatible with the results of `uname`.
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    # use zip for windows archives
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+  - id: binaries
+    formats: [binary]
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+# gomod: # required for verifable builds, but disabled for now while the repo is private
+#   proxy: true
+source:
+  enabled: true
+
+checksum:
+  name_template: 'checksums.txt'
+sboms:
+  - id: archive
+    artifacts: archive
+  - id: source # Two different sbom configurations need two different IDs
+    artifacts: source
+signs:
+  - id: sign-archive
+    cmd: cosign
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: archive
+    output: true
+  - id: sign-binaries
+    cmd: cosign
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: binary
+    output: true
+  - id: sign-checksum
+    cmd: cosign
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+    output: true
+  - id: sign-source
+    cmd: cosign
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: source
+    output: true
+  - id: sign-sbom
+    cmd: cosign
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: sbom
+    output: true
+homebrew_casks:
+  - name: run-mcp
+    ids: [archives]
+    description: "A fast, portable, single-binary security scanner for the Model Context Protocol (MCP)."
+    homepage: "https://github.com/ensigniasec/run-mcp"
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: "Brew cask update for {{ .ProjectName }} version {{ .Tag }}"
+    uninstall:
+      delete:
+      - "~/.run-mcp/results.json"
+      - "~/.run-mcp"
+      - "~/Library/Application Support/run-mcp"
+      - "~/Library/Application Support/run-mcp/results.json"
+      - "/Library/Application Support/run-mcp"
+      - "/Library/Application Support/run-mcp/config.yaml"
+    repository:
+      owner: ensigniasec
+      name: homebrew-run-mcp
+      branch: main
+      token: "{{ .Env.HOMEBREW_TOKEN }}"
+npms:
+  - id: run-mcp
+    name: "@ensignia/run-mcp"
+    description: A fast, portable, single-binary security scanner for the Model Context Protocol (MCP).
+    homepage: https://github.com/ensigniasec/run-mcp
+    keywords:
+      - cli
+      - golang
+      - mcp
+      - security
+      - scanner
+    license: Apache-2.0
+    author: Ensignia Security [email-protected]
+    repository: https://github.com/ensigniasec/run-mcp
+    bugs: https://github.com/ensigniasec/run-mcp/issues
+    access: public
+    format: tar.gz
+# dmg:
+#   - # ID of the resulting image.
+#     #
+#     # Default: the project name.
+#     id: run-mcp
+
+#     # Filename of the image (without the extension).
+#     #
+#     # Default: '{{.ProjectName}}_{{.Arch}}'.
+#     # Templates: allowed.
+#     name: "run-mcp-{{.Arch}}"
+
+#     # IDs of the archives to use.
+#     # Empty means all IDs.
+#     ids:
+#       - archives
+
+#     # Allows to further filter the artifacts.
+#     #
+#     # Artifacts that do not match this expression will be ignored.
+#     #
+#     # This feature is only available in GoReleaser Pro.
+#     # Since: v2.4.
+#     # Templates: allowed.
+#     if: '{{ eq .Os "darwin" }}'
+
+#     # More files that will be available in the context in which the image
+#     # will be built.
+#     extra_files:
+#       - logo.ico
+
+
+#     # Whether to remove the archives from the artifact list.
+#     # If left as false, your end release will have both the archives and the
+#     # dmg files.
+#     replace: true
+
+#     # Set the modified timestamp on the output image, typically
+#     # you would do this to ensure a build was reproducible. Pass an
+#     # empty string to skip modifying the output.
+#     #
+#     # Templates: allowed.
+#     mod_timestamp: "{{ .CommitTimestamp }}"
+changelog:
+  format: "{{.SHA}}: {{.Message}} (@{{.AuthorUsername}})"
+  sort: asc
+  abbrev: -1
+  # Compose your release notes with AI.
+  # See below for more details.
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: "Bug fixes"
+      regexp: '^.*?bug(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Others
+      order: 999
+  filters:
+    include:
+      - "^feat"
+      - "^bug"
+      - "^refactor"
+      - "^test"
+      - "^perf"

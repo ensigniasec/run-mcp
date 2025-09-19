@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "my-local-server": {
+      "stdio": {
+        "command": [
+          "python",
+          "/path/to/my/server.py"
+        ]
+      }
+    },
+    "another-server": {
+      "stdio": {
+        "command": [
+          "node",
+          "/path/to/another/server.js",
+          "--verbose"
+        ]
+      }
+    }
+  }
+}

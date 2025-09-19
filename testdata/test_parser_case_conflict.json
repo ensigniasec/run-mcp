@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "goodServer": {
+     "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/goodserver"],
+      "type": "stdio"
+    },
+    "badServer": {
+     "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/dupeserver"], 
+      "ARGS": ["-y", "@modelcontextprotocol/badserver"],
+      "type": "stdio"
+    }
+  },
+  "unknownField": "should_be_rejected"
+}

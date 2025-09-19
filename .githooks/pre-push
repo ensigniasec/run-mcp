@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "[pre-push] Running tests (short & race) ..."
+
+if command -v task >/dev/null 2>&1; then
+  task test-short
+  task test-race
+else
+  go test ./... -short
+  go test ./... -race
+fi
+
+echo "[pre-push] OK"

@@ -1,0 +1,20 @@
+version: "1.0"
+cache: true
+mcp:
+  servers:
+    filesystem:
+      command: "npx"
+      args: ["-y", "@modelcontextprotocol/server-filesystem"]
+      type: "stdio"
+    database:
+      command: "python"
+      args: ["-m", "database_server"]
+      type: "stdio"
+      env:
+        DB_URL: "postgresql://localhost/chat"
+endpoints:
+  assistants:
+    disableBuilder: false
+    pollIntervalMs: 750
+    timeoutMs: 180000
+    supportedIds: ["asst_example"]
