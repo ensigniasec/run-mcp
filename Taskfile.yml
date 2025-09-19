@@ -307,8 +307,6 @@ tasks:
         else
           SRC_REPO_NAME=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || echo .)")
         fi
-        SRC_SUBPATH=$(git rev-parse --show-prefix 2>/dev/null || echo .)
-        SRC_SUBPATH=${SRC_SUBPATH%/}
         TS=$(date -u +%Y%m%d%H%M%S)
         OSS_DIR=$(mktemp -d)
         PUBLIC_DIR=$(mktemp -d)
@@ -326,7 +324,7 @@ tasks:
         echo "Syncing snapshot into public working tree ..."
         rsync -a --delete --exclude '.git/' "$OSS_DIR"/ ./
         if [ -n "$(git status --porcelain)" ]; then
-          msg="chore(mirror): sync ${SRC_SUBPATH:-.} from ${SRC_REPO_NAME:-local}@$SRC_SHA"
+          msg="chore(mirror): sync from ${SRC_REPO_NAME:-local}@$SRC_SHA"
           BRANCH="chore/mirror/${SRC_REPO_NAME:-local}-${SRC_SHA}-$TS"
           git checkout -b "$BRANCH"
           git add -A
@@ -334,7 +332,7 @@ tasks:
           git push -u origin "$BRANCH"
           # Attempt to open a PR using GitHub CLI if available
           if command -v gh >/dev/null 2>&1; then
-            gh pr create --title "$msg" --body "Automated mirror from ${SRC_REPO_NAME:-local}@$SRC_SHA\n\n- Source repo: ${SRC_REPO_URL:-unknown}\n- Subpath: ${SRC_SUBPATH:-.}\n- Timestamp: $TS" --base main --head "$BRANCH" || true
+            gh pr create --title "$msg" --body "Automated mirror from ${SRC_REPO_NAME:-local}@$SRC_SHA\n\n- Source repo: ${SRC_REPO_URL:-unknown}\n- Timestamp: $TS" --base main --head "$BRANCH" || true
           else
             # Best-effort PR URL for GitHub
             REPO_URL='{{.PUBLIC_REPO}}'
