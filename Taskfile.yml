@@ -301,6 +301,14 @@ tasks:
       - |
         set -euo pipefail
         SRC_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo local)
+        SRC_REPO_URL=$(git config --get remote.origin.url 2>/dev/null || echo "")
+        if [ -n "$SRC_REPO_URL" ]; then
+          SRC_REPO_NAME=$(basename -s .git "$SRC_REPO_URL")
+        else
+          SRC_REPO_NAME=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || echo .)")
+        fi
+        SRC_SUBPATH=$(git rev-parse --show-prefix 2>/dev/null || echo .)
+        SRC_SUBPATH=${SRC_SUBPATH%/}
         OSS_DIR=$(mktemp -d)
         PUBLIC_DIR=$(mktemp -d)
         echo "Building filtered snapshot into $OSS_DIR ..."
@@ -317,7 +325,7 @@ tasks:
         echo "Syncing snapshot into public working tree ..."
         rsync -a --delete --exclude '.git/' "$OSS_DIR"/ ./
         if [ -n "$(git status --porcelain)" ]; then
-          msg="Sync from $(basename $(git rev-parse --show-toplevel 2>/dev/null || echo .))@$SRC_SHA"
+          msg="chore(mirror): sync ${SRC_SUBPATH:-.} from ${SRC_REPO_NAME:-local}@$SRC_SHA"
           git add -A
           git commit -m "$msg"
           git push origin main
