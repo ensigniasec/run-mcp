@@ -3,9 +3,7 @@
 
 # The lines below are called `modelines`. See `:help modeline`
 # Feel free to remove those if you don't want/need to use them.
-# yaml-language-server: $schema=
-
-# vim: set ts=2 sw=2 tw=0 fo=cnqoj
+# yaml-language-server: $schema=https://goreleaser.com/static/schema-pro.json
 
 version: 2
 
@@ -129,6 +127,55 @@ signs:
       - "--yes"
     artifacts: sbom
     output: true
+notarize:
+  macos:
+    - enabled: '{{ isEnvSet "MACOS_SIGN_P12" }}'
+
+      # IDs to use to filter the built binaries.
+      #
+      # Default: the project name.
+      ids:
+        - build1
+        - build2
+
+      # Before notarizing, we need to sign the binary.
+      # This block defines the configuration for doing so.
+      sign:
+        # The .p12 certificate file path or its base64'd contents.
+        #
+        # Templates: allowed.
+        certificate: "{{.Env.MACOS_SIGN_P12}}"
+
+        # The password to be used to open the certificate.
+        #
+        # Templates: allowed.
+        password: "{{.Env.MACOS_SIGN_PASSWORD}}"
+      # Then, we notarize the binaries.
+      #
+      # You can leave this section empty if you only want
+      # to sign the binaries (Since: v2.1).
+      notarize:
+        # The issuer ID.
+        # Its the UUID you see when creating the App Store Connect key.
+        #
+        # Templates: allowed.
+        issuer_id: "{{.Env.MACOS_NOTARY_ISSUER_ID}}"
+
+        # Key ID.
+        # You can see it in the list of App Store Connect Keys.
+        # It will also be in the ApiKey filename.
+        #
+        # Templates: allowed.
+        key_id: "{{.Env.MACOS_NOTARY_KEY_ID}}"
+
+        # The .p8 key file path or its base64'd contents.
+        #
+        # Templates: allowed.
+        key: "{{.Env.MACOS_NOTARY_KEY}}"
+
+        # Whether to wait for the notarization to finish.
+        # Not recommended, as it could take a really long time.
+        wait: true
 homebrew_casks:
   - name: run-mcp
     ids: [archives]
@@ -142,20 +189,6 @@ homebrew_casks:
     commit_author:
       name: goreleaserbot
       email: bot@goreleaser.com
-      signing:
-        enabled: true
-        key: "{{ .Env.GPG_SIGNING_KEY }}"
-
-        # The GPG program to use for signing.
-        #
-        # Templates: allowed.
-        program: gpg2
-
-        # The signature format to use.
-        #
-        # Valid options: openpgp, x509, ssh.
-        # Default: openpgp.
-        format: openpgp
     commit_msg_template: "Brew cask update for {{ .ProjectName }} version {{ .Tag }}"
     uninstall:
       delete:
@@ -185,49 +218,6 @@ npms:
     bugs: https://github.com/ensigniasec/run-mcp/issues
     access: public
     format: tar.gz
-# dmg:
-#   - # ID of the resulting image.
-#     #
-#     # Default: the project name.
-#     id: run-mcp
-
-#     # Filename of the image (without the extension).
-#     #
-#     # Default: '{{.ProjectName}}_{{.Arch}}'.
-#     # Templates: allowed.
-#     name: "run-mcp-{{.Arch}}"
-
-#     # IDs of the archives to use.
-#     # Empty means all IDs.
-#     ids:
-#       - archives
-
-#     # Allows to further filter the artifacts.
-#     #
-#     # Artifacts that do not match this expression will be ignored.
-#     #
-#     # This feature is only available in GoReleaser Pro.
-#     # Since: v2.4.
-#     # Templates: allowed.
-#     if: '{{ eq .Os "darwin" }}'
-
-#     # More files that will be available in the context in which the image
-#     # will be built.
-#     extra_files:
-#       - logo.ico
-
-
-#     # Whether to remove the archives from the artifact list.
-#     # If left as false, your end release will have both the archives and the
-#     # dmg files.
-#     replace: true
-
-#     # Set the modified timestamp on the output image, typically
-#     # you would do this to ensure a build was reproducible. Pass an
-#     # empty string to skip modifying the output.
-#     #
-#     # Templates: allowed.
-#     mod_timestamp: "{{ .CommitTimestamp }}"
 changelog:
   format: "{{.SHA}}: {{.Message}} (@{{.AuthorUsername}})"
   sort: asc

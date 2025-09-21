@@ -34,3 +34,5 @@ jobs:
             ${{ runner.os }}-go-
       - name: Run tests
         run: go test ./... -v
+      - name: Run race tests
+        run: go test ./... -race -v

@@ -1,6 +1,8 @@
 package api
 
 import (
+	"net/url"
+
 	apigen "github.com/ensigniasec/run-mcp/internal/api-gen"
 )
 
@@ -59,11 +61,23 @@ func (OCITarget) kind() apigen.IdentifierKind { return apigen.Oci }
 // URLTarget identifies a raw URL string.
 type URLTarget struct{ URL string }
 
-// NewURLTarget validates non-empty URL.
+// NewURLTarget validates non-empty URL and enforces http(s) scheme only.
 func NewURLTarget(u string) (URLTarget, error) { //nolint:ireturn
 	if u == "" {
 		return URLTarget{}, ErrValidation
 	}
+
+	parsed, err := url.Parse(u)
+	if err != nil {
+		return URLTarget{}, ErrValidation
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return URLTarget{}, ErrValidation
+	}
+	if parsed.Host == "" { // ensure not a scheme-only or relative URL
+		return URLTarget{}, ErrValidation
+	}
+
 	return URLTarget{URL: u}, nil
 }
 

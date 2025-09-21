@@ -25,6 +25,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Homebrew cask: enable commit signing; refine uninstall paths to user-level
   directories.
 
+- CLI/TUI: Performance improvements: star to initialize the API client in the
+  background for faster startup when online.
+- Ratings: `RatingsCollector` now buffers submissions while offline and flushes
+  when a client becomes available; debounce timer only runs when a client is
+  set.
+- API: `NewURLTarget` now enforces `http`/`https` schemes and requires a host
+  component.
+
 ## [0.1.1] - Initial public release
 
 - No changes
