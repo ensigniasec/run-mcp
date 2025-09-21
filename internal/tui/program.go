@@ -30,8 +30,8 @@ func Run(ctx context.Context, configPaths []string, s *scanner.MCPScanner, rc *s
 	}
 	model.offline = isOffline
 
-	// When online, wire collector stage notifiers to results updates.
-	if rc != nil && !isOffline {
+	// Wire collector stage notifiers to results updates (even if offline at start).
+	if rc != nil {
 		rc.WithStageNotifiers(
 			func(serverName string) {
 				resultsCh <- resultsMsg{HostID: serverName, Status: Running, Message: "submitted"}

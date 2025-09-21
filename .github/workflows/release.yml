@@ -13,7 +13,6 @@ on:
 permissions:
   contents: write # needed to write releases
   id-token: write # needed for keyless signing
-  packages: write # needed for ghcr access
   attestations: write # needed for provenance
 
 jobs:
@@ -46,6 +45,19 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
           HOMEBREW_TOKEN: ${{ secrets.HOMEBREW_TOKEN }}
+          MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
+          MACOS_SIGN_PASSWORD: ${{ secrets.MACOS_SIGN_PASSWORD }}
+          # The base64 of the contents of your '.p8' key.
+          MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
+
+          # The ID of the '.p8' key.
+          # You can find it in the filename, as well as the Apple Developer Portal
+          # website.
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+
+          # The issuer UUID.
+          # You can find it in the Apple Developer Portal website.
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
       - name: Upload Build Provenance Attestations
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a #v3
         with:

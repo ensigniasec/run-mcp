@@ -91,7 +91,7 @@ func Execute() {
 var scanCmd = &cobra.Command{
 	Use:   "scan [CONFIG_FILE...]",
 	Short: "Scan one or more MCP config files. [Defaults to well-known locations]",
-	Long:  `Scan one or more MCP configuration files for security issues. If no files are specified, well-known config locations will be checked.`,
+	Long:  "Scan one or more MCP configuration files for security issues. If no files are specified, well-known config locations will be checked.",
 	Run: func(cmd *cobra.Command, args []string) {
 		// Check for conflicting flags
 		if jsonOutput && tuiMode {
@@ -125,25 +125,24 @@ var scanCmd = &cobra.Command{
 			ctx = api.WithIdentity(ctx, api.Identity{OrgUUID: orgUUID, HostUUID: hostUUID})
 		}
 
-		// If not offline, build API client.
-		var client api.RatingsClient
-		if !offline {
-			opts := []api.ClientOption{}
-			if cl, err := api.NewClient(opts...); err == nil {
-				client = cl
-			} else if errors.Is(err, api.ErrOffline) {
-				// Health probe failed; proceed in offline mode gracefully.
-				logrus.Debug("remote health unavailable; continuing in offline mode")
-				offline = true
-			} else {
-				// Any other error is unexpected; fail loudly.
-				logrus.Fatalf("api client init failed: %v", err)
-			}
-		}
-		// Create RatingsCollector to enrich the scan results when received from remote, or local allowlist.
-		rc := scanner.NewRatingsCollector(ctx, client, st)
+		// Create RatingsCollector first with no client to allow immediate TUI launch.
+		rc := scanner.NewRatingsCollector(ctx, nil, st)
 		// Start the scan of local files
 		s := scanner.NewMCPScanner(args, storageFile).WithRatingsCollector(rc)
+
+		// If online mode, initialize API client in the background and attach to collector when ready.
+		if !offline {
+			go func() {
+				opts := []api.ClientOption{}
+				if cl, err := api.NewClient(opts...); err == nil {
+					rc.SetClient(cl)
+				} else if errors.Is(err, api.ErrOffline) {
+					logrus.Debug("remote health unavailable; continuing in offline mode")
+				} else {
+					logrus.Debugf("api client init failed: %v", err)
+				}
+			}()
+		}
 
 		// Choose output mode BEFORE scanning for real-time streaming
 		if tuiMode {

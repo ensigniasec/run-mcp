@@ -86,6 +86,18 @@ func (rc *RatingsCollector) IsOffline() bool {
 	return rc == nil || rc.client == nil
 }
 
+// SetClient sets the underlying ratings client after the collector has been created.
+// If there is a pending batch, it will be flushed immediately.
+func (rc *RatingsCollector) SetClient(client api.RatingsClient) {
+	rc.mu.Lock()
+	rc.client = client
+	// If a timer was not scheduled while offline but we have a batch, flush now.
+	if len(rc.curBatch) > 0 {
+		rc.flushLocked()
+	}
+	rc.mu.Unlock()
+}
+
 // WithStageNotifiers sets optional callbacks for UI to reflect submission stages.
 func (rc *RatingsCollector) WithStageNotifiers(submitted func(string), processing func(string), received func(string)) *RatingsCollector { //nolint:ireturn
 	rc.notifySubmitted = submitted
@@ -116,16 +128,6 @@ func (rc *RatingsCollector) Submit(serverName string, serverConfig interface{}) 
 	if localAllowlisted(rc.storage, serverName, serverName) {
 		rc.mu.Lock()
 		rc.serverPolicy[serverName] = "allowed"
-		rc.mu.Unlock()
-		return
-	}
-
-	// If offline, surface unknown and return.
-	if rc.client == nil {
-		rc.mu.Lock()
-		if _, ok := rc.serverPolicy[serverName]; !ok {
-			rc.serverPolicy[serverName] = serverPolicyUnknown
-		}
 		rc.mu.Unlock()
 		return
 	}
@@ -163,10 +165,13 @@ func (rc *RatingsCollector) Submit(serverName string, serverConfig interface{}) 
 		go rc.notifySubmitted(serverName)
 	}
 
-	if rc.timer == nil {
-		rc.timer = time.AfterFunc(rc.debounce, func() { rc.flush() })
-	} else {
-		rc.timer.Reset(rc.debounce)
+	// Only schedule a flush when a client is available; otherwise, we'll flush when SetClient is called.
+	if rc.client != nil {
+		if rc.timer == nil {
+			rc.timer = time.AfterFunc(rc.debounce, func() { rc.flush() })
+		} else {
+			rc.timer.Reset(rc.debounce)
+		}
 	}
 	if len(rc.curBatch) >= rc.batchSize {
 		rc.flushLocked()
@@ -177,13 +182,20 @@ func (rc *RatingsCollector) Submit(serverName string, serverConfig interface{}) 
 // flush triggers a flush from the debounce callback.
 func (rc *RatingsCollector) flush() {
 	rc.mu.Lock()
-	rc.flushLocked()
+	// Do not flush while offline; wait for client to be set.
+	if rc.client != nil {
+		rc.flushLocked()
+	}
 	rc.mu.Unlock()
 }
 
 // flushLocked moves the current batch to the send channel. Caller must hold rc.mu.
 func (rc *RatingsCollector) flushLocked() {
 	if len(rc.curBatch) == 0 {
+		return
+	}
+	if rc.client == nil {
+		// Keep batch buffered until a client is set.
 		return
 	}
 	batch := make([]apigen.TargetIdentifier, len(rc.curBatch))

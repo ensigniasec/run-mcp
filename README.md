@@ -25,6 +25,14 @@ This tool scans MCP (modelcontextprotocol.io) configurations for security vulner
 - **Flexible Output:** Supports both human-readable, colorized output for interactive use and structured JSON output for integration with other tools and systems.
 - **Portable & Performant:** Distributed as a single, self-contained binary, written in Go for high performance.
 
+## Quick Start
+
+```sh
+npm i -g @ensignia/run-mcp
+run-mcp scan
+# This will look for 
+```
+
 ## Installation
 
 The easiest way to get started is via package managers:
@@ -106,7 +114,7 @@ go build -o build/run-mcp ./cmd/run-mcp
 - npm/prebuilt binaries work without Go installed.
 - If your local Go is older and you encounter errors, either enable `GOTOOLCHAIN=auto` or upgrade Go to `1.25.0`.
 
-## Quick Start
+## Usage
 
 ### Scanning for Vulnerabilities
 
