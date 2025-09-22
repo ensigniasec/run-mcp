@@ -308,6 +308,16 @@ tasks:
           SRC_REPO_NAME=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || echo .)")
         fi
         TS=$(date -u +%Y%m%d%H%M%S)
+        # Determine change summary from source repository since last tag
+        SRC_TOP=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+        SRC_LAST_TAG=$(cd "$SRC_TOP" && git describe --tags --abbrev=0 2>/dev/null || true)
+        if [ -n "$SRC_LAST_TAG" ]; then
+          SRC_RANGE="${SRC_LAST_TAG}..HEAD"
+        else
+          SRC_FIRST_COMMIT=$(cd "$SRC_TOP" && git rev-list --max-parents=0 HEAD)
+          SRC_RANGE="${SRC_FIRST_COMMIT}..HEAD"
+        fi
+        CHANGE_SUMMARY=$(cd "$SRC_TOP" && git log --no-merges --pretty='- %s' $SRC_RANGE | sed -n '1,200p')
         OSS_DIR=$(mktemp -d)
         PUBLIC_DIR=$(mktemp -d)
         echo "Building filtered snapshot into $OSS_DIR ..."
@@ -324,15 +334,30 @@ tasks:
         echo "Syncing snapshot into public working tree ..."
         rsync -a --delete --exclude '.git/' "$OSS_DIR"/ ./
         if [ -n "$(git status --porcelain)" ]; then
-          msg="chore(mirror): sync from ${SRC_REPO_NAME:-local}@$SRC_SHA"
+          MSG_HEADER="chore(mirror): sync from ${SRC_REPO_NAME:-local}@$SRC_SHA"
+          MSG_FILE=$(mktemp)
+          {
+            printf "%s\n\n" "$MSG_HEADER"
+            if [ -n "$SRC_LAST_TAG" ]; then
+              printf "Changes since %s:\n" "$SRC_LAST_TAG"
+            else
+              printf "Changes since initial commit:\n"
+            fi
+            if [ -n "$CHANGE_SUMMARY" ]; then
+              printf "%s\n" "$CHANGE_SUMMARY"
+            else
+              printf "- No additional commit summaries found.\n"
+            fi
+            printf "\nSource repo: %s\nTimestamp: %s\n" "${SRC_REPO_URL:-unknown}" "$TS"
+          } > "$MSG_FILE"
           BRANCH="chore/mirror/${SRC_REPO_NAME:-local}-${SRC_SHA}-$TS"
           git checkout -b "$BRANCH"
           git add -A
-          git commit -m "$msg"
+          git commit -F "$MSG_FILE"
           git push -u origin "$BRANCH"
           # Attempt to open a PR using GitHub CLI if available
           if command -v gh >/dev/null 2>&1; then
-            gh pr create --title "$msg" --body "Automated mirror from ${SRC_REPO_NAME:-local}@$SRC_SHA\n\n- Source repo: ${SRC_REPO_URL:-unknown}\n- Timestamp: $TS" --base main --head "$BRANCH" || true
+            gh pr create --title "$MSG_HEADER" --body "$(sed -n '2,$p' "$MSG_FILE")" --base main --head "$BRANCH" || true
           else
             # Best-effort PR URL for GitHub
             REPO_URL='{{.PUBLIC_REPO}}'
@@ -383,7 +408,30 @@ tasks:
         if git rev-parse "$TAG_IN" >/dev/null 2>&1; then
           echo "Tag $TAG_IN already exists in public mirror"
         else
-          git tag -a "$TAG_IN" -m "$TAG_IN release"
+          # Build annotated tag message with Conventional Commits style and summary since last tag
+          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          if [ -n "$PREV_TAG" ]; then
+            RANGE="${PREV_TAG}..HEAD"
+          else
+            FIRST_COMMIT=$(git rev-list --max-parents=0 HEAD)
+            RANGE="${FIRST_COMMIT}..HEAD"
+          fi
+          SUMMARY=$(git log --no-merges --pretty='- %s' $RANGE | sed -n '1,200p')
+          TAG_MSG=$(mktemp)
+          {
+            printf "chore(release): %s\n\n" "$TAG_IN"
+            if [ -n "$PREV_TAG" ]; then
+              printf "Changes since %s:\n" "$PREV_TAG"
+            else
+              printf "Changes since initial commit:\n"
+            fi
+            if [ -n "$SUMMARY" ]; then
+              printf "%s\n" "$SUMMARY"
+            else
+              printf "- No additional commit summaries found.\n"
+            fi
+          } > "$TAG_MSG"
+          git tag -a "$TAG_IN" -F "$TAG_MSG"
           git push origin "$TAG_IN"
           echo "Pushed tag $TAG_IN to public mirror"
         fi
