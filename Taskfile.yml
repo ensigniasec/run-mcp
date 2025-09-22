@@ -332,7 +332,7 @@ tasks:
           git push -u origin "$BRANCH"
           # Attempt to open a PR using GitHub CLI if available
           if command -v gh >/dev/null 2>&1; then
-            gh pr create --title "$msg" --body "Automated mirror from ${SRC_REPO_NAME:-local}@$SRC_SHA\n\n- Source repo: ${SRC_REPO_URL:-unknown}\n- Timestamp: $TS" --base main --head "$BRANCH" || true
+            gh pr create --title "$msg" --body "$(printf "Automated mirror from %s@%s\n\n- Source repo: %s\n- Timestamp: %s\n" "${SRC_REPO_NAME:-local}" "$SRC_SHA" "${SRC_REPO_URL:-unknown}" "$TS")" --base main --head "$BRANCH" || true
           else
             # Best-effort PR URL for GitHub
             REPO_URL='{{.PUBLIC_REPO}}'

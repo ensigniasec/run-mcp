@@ -28,13 +28,9 @@ builds:
     goarch: [amd64, arm64]
     ldflags:
       - -s -w
-      - -X main.Version={{.Version}}
-      - -X main.Commit={{.Commit}}
-      - -X main.Date={{.Date}}
-      - -X github.com/ensigniasec/run-mcp/internal/api.BuildVersion={{.Version}}
-      - -X github.com/ensigniasec/run-mcp/internal/api.BuildCommit={{.Commit}}
-      - -X github.com/ensigniasec/run-mcp/internal/api.BuildDate={{.Date}}
-
+      - -X main.build={{ .Version }}
+      - -X main.commit={{ .Commit }}
+      - -X main.date={{ .Date }}
 archives:
   - id: archives
     formats: [tar.gz]
@@ -59,8 +55,8 @@ archives:
       {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
-# gomod: # required for verifable builds, but disabled for now while the repo is private
-#   proxy: true
+gomod: # required for verifable builds
+  proxy: true
 source:
   enabled: true
 checksum:
@@ -169,19 +165,19 @@ npms:
   - id: run-mcp
     name: "@ensignia/run-mcp"
     description: A fast, portable, single-binary security scanner for the Model Context Protocol (MCP).
-    homepage: https://github.com/ensigniasec/run-mcp
+    license: Apache-2.0
+    author: "Ensignia Security [email-protected]"
+    repository: https://github.com/ensigniasec/run-mcp
+    bugs: https://github.com/ensigniasec/run-mcp/issues
     keywords:
       - cli
       - golang
       - mcp
       - security
       - scanner
-    license: Apache-2.0
-    author: Ensignia Security [email-protected]
-    repository: https://github.com/ensigniasec/run-mcp
-    bugs: https://github.com/ensigniasec/run-mcp/issues
     access: public
     format: tar.gz
+    url_template: "https://github.com/ensigniasec/run-mcp/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
 changelog:
   format: "{{.SHA}}: {{.Message}} (@{{.AuthorUsername}})"
   sort: asc
