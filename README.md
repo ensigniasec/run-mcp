@@ -17,11 +17,10 @@ This tool scans MCP (modelcontextprotocol.io) configurations for security vulner
 
 ## Features
 
-- **Discovery (`scan`):** Scans all your installed MCP servers for misconfigured secrets, and submits them for ratings across
-- **Automatic Discovery:** Automatically discovers MCP configurations from well-known clients, including VSCode, Claude, Cursor, and Windsurf.
+- **Discovery (`scan`):** Scans the local disk for MCP servers configs, looking for misconfigured secrets. The Scanner also submits MCP Servers for ratings across SCA/SAST/Secrets/License checks.
 - _(experimental) Allowlisting:`experimental allow/deny` Manage a local allowlist of blessed MCP Servers._
-- _(experimental) Inspect: `experimental inspect`: Actively enumerates an MCP server for tool calls, malicious tool descriptions, prompt injection vulnerabilities, tool poisoning attacks, cross-origin escalations, and rug pull attacks._
-- _(experimental) Proxy: `experimental proxy` Forwards traffic for a given MCP server through a local proxy for inspection._
+<!-- - _(experimental) Inspect: `experimental inspect`: Actively enumerates an MCP server for tool calls, malicious tool descriptions, prompt injection vulnerabilities, tool poisoning attacks, cross-origin escalations, and rug pull attacks._
+- _(experimental) Proxy: `experimental proxy` Forwards traffic for a given MCP server through a local proxy for inspection._ -->
 - **Flexible Output:** Supports both human-readable, colorized output for interactive use and structured JSON output for integration with other tools and systems.
 - **Portable & Performant:** Distributed as a single, self-contained binary, written in Go for high performance.
 
@@ -30,12 +29,13 @@ This tool scans MCP (modelcontextprotocol.io) configurations for security vulner
 ```sh
 npm i -g @ensignia/run-mcp
 run-mcp scan
-# This will look for 
+# This will look for MCP configs locally on disk, and find common MCP configs.
+# If credentials are stored insecurely, it will redact and highlight them.
+# For each discovered MCP server, it will submit it for analysis, to find
+# potential security issues. Finally, it will print a report with actionable findings.
 ```
 
 ## Installation
-
-The easiest way to get started is via package managers:
 
 ### npm (all platforms):
 
@@ -44,7 +44,7 @@ npm i -g @ensignia/run-mcp
 run-mcp --version
 ```
 
-### Homebrew (macOS)
+### Homebrew (macOS only)
 
 ```sh
 brew tap ensigniasec/run-mcp
@@ -57,31 +57,30 @@ run-mcp --version
 Use the installer script to download the correct archive for your OS/arch and
 verify checksums and signatures with cosign.
 
+Requirements: `cosign` and either `wget` or `curl`. On macOS, `shasum` is used; on Linux, `sha256sum`.
+
 ```sh
 git clone git@github.com:ensigniasec/run-mcp.git
 chmod +x run-mcp/scripts/install.sh
-less ./run-mcp/scripts/install.sh
 bash ./run-mcp/scripts/install.sh
 
-# Or fetch and run directly
+# Or, if you really must curl|sh - fetch and run directly
 curl -fsSL https://raw.githubusercontent.com/ensigniasec/run-mcp/main/scripts/install.sh -o install.sh
-less install.sh
 bash ./install.sh
 ```
-
-Requirements: `cosign` and either `wget` or `curl`. On macOS, `shasum` is used; on Linux, `sha256sum`.
 
 Alternative verification with GitHub CLI:
 
 ```sh
-gh release verify v0.1.1 --repo ensigniasec/run-mcp
+export TAG=<Version to verify goes here> # e.g. v0.1.5
+gh release verify $TAG --repo ensigniasec/run-mcp
 gh attestation verify --owner ensigniasec *.tar.gz
 gh attestation verify --owner ensigniasec checksums.txt
 ```
 
 ### FAQ:
 
-If Gatekeeper blocks the binary ("Apple could not verify"), you have a few options:
+On Mac, if Gatekeeper blocks the binary ("Apple could not verify"), you have a few options:
 
 - Open via System Settings: System Settings → Privacy & Security → Open Anyway
 - Reinstall without quarantine:
@@ -226,6 +225,8 @@ run-mcp org clear
 
 ## Contributing
 
+Issues & PRs are very welcome!
+
 You can develop in a reproducible containerized environment using Dev Containers (VS Code) or GitHub Codespaces.
 
 ### VS Code Dev Containers
@@ -243,12 +244,9 @@ task build            # Build the CLI
 task test             # Run tests
 task lint             # Run linters
 task scan-example     # Demo scan
-task pin-dependencies # hash-pin depdendencies of Github Actions
 ```
 
-Notes:
-
-- If your local Go version differs from the version specified in `go.mod`, the container uses Go's toolchain auto-download to match it.
+See Taskfile.yml for more common examples
 
 ## License
 
