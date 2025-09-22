@@ -63,7 +63,6 @@ archives:
 #   proxy: true
 source:
   enabled: true
-
 checksum:
   name_template: 'checksums.txt'
 sboms:
@@ -130,52 +129,15 @@ signs:
 notarize:
   macos:
     - enabled: '{{ isEnvSet "MACOS_SIGN_P12" }}'
-
-      # IDs to use to filter the built binaries.
-      #
-      # Default: the project name.
       ids:
-        - build1
-        - build2
-
-      # Before notarizing, we need to sign the binary.
-      # This block defines the configuration for doing so.
+        - run-mcp
       sign:
-        # The .p12 certificate file path or its base64'd contents.
-        #
-        # Templates: allowed.
         certificate: "{{.Env.MACOS_SIGN_P12}}"
-
-        # The password to be used to open the certificate.
-        #
-        # Templates: allowed.
         password: "{{.Env.MACOS_SIGN_PASSWORD}}"
-      # Then, we notarize the binaries.
-      #
-      # You can leave this section empty if you only want
-      # to sign the binaries (Since: v2.1).
       notarize:
-        # The issuer ID.
-        # Its the UUID you see when creating the App Store Connect key.
-        #
-        # Templates: allowed.
         issuer_id: "{{.Env.MACOS_NOTARY_ISSUER_ID}}"
-
-        # Key ID.
-        # You can see it in the list of App Store Connect Keys.
-        # It will also be in the ApiKey filename.
-        #
-        # Templates: allowed.
         key_id: "{{.Env.MACOS_NOTARY_KEY_ID}}"
-
-        # The .p8 key file path or its base64'd contents.
-        #
-        # Templates: allowed.
         key: "{{.Env.MACOS_NOTARY_KEY}}"
-
-        # Whether to wait for the notarization to finish.
-        # Not recommended, as it could take a really long time.
-        wait: true
 homebrew_casks:
   - name: run-mcp
     ids: [archives]
@@ -185,7 +147,9 @@ homebrew_casks:
     hooks:
       post:
         install: |
-          system_command '/usr/bin/xattr', args: ['-dr', 'com.apple.quarantine', "#{staged_path}/run-mcp"], sudo: true
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/run-mcp"], sudo: true
+          end
     commit_author:
       name: goreleaserbot
       email: bot@goreleaser.com
