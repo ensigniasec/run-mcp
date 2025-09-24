@@ -11,7 +11,7 @@
 
 ![Run MCP](docs/RUN-MCP.svg)
 
-This tool scans MCP (modelcontextprotocol.io) configurations for security vulnerabilities, and helps you enforce security policies for your MCP Configurations.
+This tool scans [MCP](https://modelcontextprotocol.io) configurations for security vulnerabilities, and helps you enforce security policies for your MCP Configurations.
 
 # WARNING: This software is early-alpha, under active development and is subject to breaking changes.
 
@@ -29,10 +29,6 @@ This tool scans MCP (modelcontextprotocol.io) configurations for security vulner
 ```sh
 npm i -g @ensignia/run-mcp
 run-mcp scan
-# This will look for MCP configs locally on disk, and find common MCP configs.
-# If credentials are stored insecurely, it will redact and highlight them.
-# For each discovered MCP server, it will submit it for analysis, to find
-# potential security issues. Finally, it will print a report with actionable findings.
 ```
 
 ## Installation

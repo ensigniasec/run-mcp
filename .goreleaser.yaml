@@ -26,11 +26,6 @@ builds:
       - windows
       - darwin
     goarch: [amd64, arm64]
-    ldflags:
-      - -s -w
-      - -X main.build={{ .Version }}
-      - -X main.commit={{ .Commit }}
-      - -X main.date={{ .Date }}
 archives:
   - id: archives
     formats: [tar.gz]
@@ -166,8 +161,8 @@ npms:
     name: "@ensignia/run-mcp"
     description: A fast, portable, single-binary security scanner for the Model Context Protocol (MCP).
     license: Apache-2.0
-    author: "Ensignia Security [email-protected]"
-    repository: https://github.com/ensigniasec/run-mcp
+    author: "Ensignia Security [hello@ensignia.co]"
+    repository: git+https://github.com/ensigniasec/run-mcp.git
     bugs: https://github.com/ensigniasec/run-mcp/issues
     keywords:
       - cli
