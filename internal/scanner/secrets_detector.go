@@ -24,7 +24,7 @@ var (
 		"aws":           regexp.MustCompile(`\bAKIA[0-9A-Z]{16}\b`),
 		"database_url":  regexp.MustCompile(`(?i)(postgres|mysql|mongodb|redis)://[^:]+:([^@]+)@[^/\s]+`),
 		"slack":         regexp.MustCompile(`\b(?:xoxb-\d{10,}-\d{10,}-[A-Za-z0-9]{24,}|xoxp-\d{10,}-\d{10,}-\d{10,}-[A-Za-z0-9]{24,}|xoxa-2-\d{10,}-\d{10,}-\d{10,}-[A-Za-z0-9]{32,}|xoxs-[A-Za-z0-9-]{20,}|xapp-1-[A-Za-z0-9]{8,}-\d{10,}-[A-Za-z0-9]{32,}|xoxe-1-[A-Za-z0-9-]{32,})\b`),
-		"slack_webhook": regexp.MustCompile(`\bhttps://hooks\.slack\.com/services/T[A-Z0-9]{7,}/B[A-Z0-9]{8,}/[A-Za-z0-9]{24,}\b`),
+		"slack_webhook": regexp.MustCompile(`^https://hooks\.slack\.com/services/T[A-Z0-9]{7,}/B[A-Z0-9]{8,}/[A-Za-z0-9]{24,}$`),
 		"atlassian":     regexp.MustCompile(`\b(?:Atlassian\s+API\s+Token|atlassian[-_ ]?api[-_ ]?token)\b|\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+:[A-Za-z0-9]{24}\b`),
 		"atlassian_url": regexp.MustCompile(`(?i)\bhttps?://[^:@\s]+:[A-Za-z0-9]{16,64}@[A-Za-z0-9.-]+\.atlassian\.net\S*\b`),
 		"github_pat":    regexp.MustCompile(`\bgithub_pat_[A-Za-z0-9]{22}_[A-Za-z0-9]{59}\b`),
